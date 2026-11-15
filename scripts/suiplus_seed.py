@@ -192,20 +192,26 @@ def upsert_setting(cur: sqlite3.Cursor, key: str, value: str) -> None:
         cur.execute("INSERT INTO settings(key, value) VALUES(?, ?)", (key, value))
 
 
-def jblob(obj) -> bytes:
+def jblob(obj):
     """Store JSON as SQLite BLOB so Go json.RawMessage can Scan it."""
-    if isinstance(obj, (bytes, bytearray)):
-        return bytes(obj)
-    if isinstance(obj, str):
-        return obj.encode("utf-8")
-    return json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
+    if isinstance(obj, memoryview):
+        raw = obj.tobytes()
+    elif isinstance(obj, (bytes, bytearray)):
+        raw = bytes(obj)
+    elif isinstance(obj, str):
+        raw = obj.encode("utf-8")
+    else:
+        raw = json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
+    return sqlite3.Binary(raw)
 
 
 def ensure_admin(cur: sqlite3.Cursor) -> None:
+    # Only ensure username=admin here. Password must be set by `sui admin`
+    # because packaged binaries may store bcrypt hashes while Login compares accordingly.
     cur.execute("SELECT id FROM users ORDER BY id LIMIT 1")
     row = cur.fetchone()
     if row:
-        cur.execute("UPDATE users SET username=?, password=? WHERE id=?", ("admin", "admin", row[0]))
+        cur.execute("UPDATE users SET username=? WHERE id=?", ("admin", row[0]))
     else:
         cur.execute("INSERT INTO users(username, password) VALUES(?, ?)", ("admin", "admin"))
 
