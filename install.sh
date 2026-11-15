@@ -8,13 +8,16 @@ yellow='\033[0;33m'
 plain='\033[0m'
 
 REPO="${SUIPLUS_REPO:-lindanbo1688-ctrl/SUIPLUS}"
+FALLBACK_REPO="${SUIPLUS_FALLBACK_REPO:-admin8800/s-ui}"
 
 [[ $EUID -ne 0 ]] && echo -e "${red}致命错误：${plain}请使用 root 权限运行此脚本\n" && exit 1
 
 if [[ -f /etc/os-release ]]; then
+    # shellcheck disable=SC1091
     source /etc/os-release
     release=$ID
 elif [[ -f /usr/lib/os-release ]]; then
+    # shellcheck disable=SC1091
     source /usr/lib/os-release
     release=$ID
 else
@@ -38,20 +41,25 @@ arch() {
 echo "架构：$(arch)"
 
 install_base() {
+    # apt 源失效时不要整段失败（旧 Debian / 坏 mirror 常见）
     case "${release}" in
     centos | almalinux | rocky | oracle)
-        yum -y update && yum install -y -q wget curl tar tzdata ca-certificates
+        yum install -y -q wget curl tar tzdata ca-certificates || true
         ;;
     fedora)
-        dnf -y update && dnf install -y -q wget curl tar tzdata ca-certificates
+        dnf install -y -q wget curl tar tzdata ca-certificates || true
         ;;
     arch | manjaro)
-        pacman -Syu --noconfirm wget curl tar tzdata ca-certificates
+        pacman -Sy --noconfirm wget curl tar tzdata ca-certificates || true
         ;;
     *)
-        apt-get update && apt-get install -y -q wget curl tar tzdata ca-certificates
+        apt-get update -y || echo -e "${yellow}apt update 失败（源可能失效），继续尝试安装依赖…${plain}"
+        apt-get install -y -q wget curl tar tzdata ca-certificates || \
+            apt-get install -y wget curl tar ca-certificates || true
         ;;
     esac
+    command -v curl >/dev/null || { echo -e "${red}缺少 curl${plain}"; exit 1; }
+    command -v tar >/dev/null || { echo -e "${red}缺少 tar${plain}"; exit 1; }
 }
 
 config_after_install() {
@@ -68,6 +76,8 @@ config_after_install() {
         echo -e "${green}密码：${passwordTemp}${plain}"
         echo -e "###############################################"
         /usr/local/s-ui/sui admin -username "${usernameTemp}" -password "${passwordTemp}" 2>/dev/null || true
+    else
+        echo -e "${yellow}检测到已有数据库，保留原账号与入站配置${plain}"
     fi
 }
 
@@ -79,31 +89,54 @@ prepare_services() {
     systemctl daemon-reload
 }
 
-install_suiplus() {
-    cd /tmp/ || exit 1
-    local last_version=""
-    local arch_name
-    arch_name=$(arch)
+resolve_download() {
+    # stdout: "version|url"
+    local arch_name="$1"
+    local want_ver="${2:-}"
+    local ver url
 
-    if [ $# -eq 0 ] || [ -z "${1:-}" ]; then
-        last_version=$(curl -Ls "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-        if [[ -z "$last_version" ]]; then
-            echo -e "${yellow}尚未找到 ${REPO} 的 Release，尝试从 main 源码引导说明...${plain}"
-            echo -e "${red}请先在 GitHub Actions 发布带二进制的 Release，或稍后重试。${plain}"
-            echo -e "仓库：https://github.com/${REPO}"
-            echo -e "触发：Actions → 发布 → tag 例如 v1.0.0"
-            exit 1
+    if [[ -n "$want_ver" ]]; then
+        [[ "$want_ver" != v* ]] && want_ver="v${want_ver}"
+        url="https://github.com/${REPO}/releases/download/${want_ver}/s-ui-linux-${arch_name}.tar.gz"
+        if curl -fsI --connect-timeout 5 "$url" >/dev/null 2>&1; then
+            echo "${want_ver}|${url}"
+            return 0
         fi
-    else
-        last_version=$1
-        [[ "${last_version}" != v* ]] && last_version="v${last_version}"
+        echo -e "${yellow}${REPO} 无 ${want_ver}，尝试回退仓库…${plain}" >&2
+        url="https://github.com/${FALLBACK_REPO}/releases/download/${want_ver}/s-ui-linux-${arch_name}.tar.gz"
+        echo "${want_ver}|${url}"
+        return 0
     fi
 
-    echo -e "安装 SUIPLUS ${last_version} ..."
-    local url="https://github.com/${REPO}/releases/download/${last_version}/s-ui-linux-${arch_name}.tar.gz"
-    wget -N --no-check-certificate -O "/tmp/s-ui-linux-${arch_name}.tar.gz" "${url}"
-    if [[ $? -ne 0 ]]; then
-        echo -e "${red}下载失败：${url}${plain}"
+    ver=$(curl -Ls "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
+    if [[ -n "$ver" ]]; then
+        url="https://github.com/${REPO}/releases/download/${ver}/s-ui-linux-${arch_name}.tar.gz"
+        echo "${ver}|${url}"
+        return 0
+    fi
+
+    echo -e "${yellow}${REPO} 尚无 Release，临时使用上游 ${FALLBACK_REPO} 二进制（面板可先装上）${plain}" >&2
+    ver=$(curl -Ls "https://api.github.com/repos/${FALLBACK_REPO}/releases/latest" | grep '"tag_name":' | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
+    if [[ -z "$ver" ]]; then
+        echo -e "${red}无法获取任何 Release 版本${plain}" >&2
+        return 1
+    fi
+    url="https://github.com/${FALLBACK_REPO}/releases/download/${ver}/s-ui-linux-${arch_name}.tar.gz"
+    echo "${ver}|${url}"
+}
+
+install_suiplus() {
+    cd /tmp/ || exit 1
+    local arch_name info ver url
+    arch_name=$(arch)
+
+    info=$(resolve_download "$arch_name" "${1:-}") || exit 1
+    ver="${info%%|*}"
+    url="${info#*|}"
+
+    echo -e "下载：${url}"
+    if ! wget -N --no-check-certificate -O "/tmp/s-ui-linux-${arch_name}.tar.gz" "${url}"; then
+        echo -e "${red}下载失败${plain}"
         exit 1
     fi
 
@@ -115,11 +148,13 @@ install_suiplus() {
     rm -f "s-ui-linux-${arch_name}.tar.gz"
 
     chmod +x s-ui/sui s-ui/s-ui.sh
-    # 管理命令仍用 s-ui，兼容原路径
     cp s-ui/s-ui.sh /usr/bin/s-ui
-    # 覆盖菜单内安装源为 SUIPLUS
-    sed -i "s|lindanbo1688-ctrl/SUIPLUS|${REPO}|g" /usr/bin/s-ui 2>/dev/null || true
-    sed -i "s|lindanbo1688-ctrl/SUIPLUS|${REPO}|g" s-ui/s-ui.sh 2>/dev/null || true
+    # 菜单升级源指向 SUIPLUS
+    sed -i "s|admin8800/s-ui|${REPO}|g" /usr/bin/s-ui s-ui/s-ui.sh 2>/dev/null || true
+    sed -i "s|lindanbo1688-ctrl/SUIPLUS|${REPO}|g" /usr/bin/s-ui s-ui/s-ui.sh 2>/dev/null || true
+
+    # 用仓库最新 install/管理脚本覆盖（若可拉取）
+    curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/s-ui.sh" -o /usr/bin/s-ui 2>/dev/null && chmod +x /usr/bin/s-ui || true
 
     cp -rf s-ui /usr/local/
     cp -f s-ui/*.service /etc/systemd/system/ 2>/dev/null || true
@@ -129,7 +164,7 @@ install_suiplus() {
     prepare_services
     systemctl enable s-ui --now
 
-    echo -e "${green}SUIPLUS ${last_version} 安装完成${plain}"
+    echo -e "${green}SUIPLUS 安装完成（包版本标签：${ver}）${plain}"
     /usr/local/s-ui/sui uri 2>/dev/null || true
     echo ""
     s-ui help 2>/dev/null || true
