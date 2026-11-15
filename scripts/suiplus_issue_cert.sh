@@ -2,9 +2,45 @@
 # One-click ACME cert: use webDomain, or derive from cfDdnsRecord + cfDdnsZone.
 # On success writes webDomain / webCertFile / webKeyFile (and sub*) into settings.
 set -euo pipefail
+# s-ui systemd 常不带 HOME，会导致 acme.sh 装到 /.acme.sh
+export HOME=/root
+export USER=root
 DB="${SUI_DB:-/usr/local/s-ui/db/s-ui.db}"
 CERT_DIR="${SUIPLUS_CERT_DIR:-/usr/local/s-ui/cert}"
-mkdir -p "$CERT_DIR"
+ACME_HOME="${ACME_HOME:-/root/.acme.sh}"
+mkdir -p "$CERT_DIR" "$ACME_HOME"
+
+find_acme() {
+  for p in "$ACME_HOME/acme.sh" /root/.acme.sh/acme.sh /.acme.sh/acme.sh; do
+    if [[ -x "$p" ]]; then
+      echo "$p"
+      return 0
+    fi
+  done
+  return 1
+}
+
+ensure_acme() {
+  local email_zone="$1"
+  local acme
+  if acme="$(find_acme)"; then
+    echo "$acme"
+    return 0
+  fi
+  echo "[suiplus-cert] installing acme.sh into ${ACME_HOME} ..."
+  curl -fsSL https://get.acme.sh | HOME=/root USER=root sh -s email="admin@${email_zone}" || true
+  # installer may still drop into /.acme.sh if env ignored — relocate
+  if [[ ! -x "$ACME_HOME/acme.sh" && -x /.acme.sh/acme.sh ]]; then
+    mkdir -p "$ACME_HOME"
+    cp -a /.acme.sh/. "$ACME_HOME/" || true
+  fi
+  if acme="$(find_acme)"; then
+    echo "$acme"
+    return 0
+  fi
+  echo "[suiplus-cert] acme.sh install failed" >&2
+  return 1
+}
 
 get_setting() {
   sqlite3 "$DB" "SELECT value FROM settings WHERE key='$1' LIMIT 1;" 2>/dev/null || true
@@ -59,13 +95,16 @@ echo "[suiplus-cert] domain=${DOMAIN}"
 
 if [[ -n "$TOKEN" ]]; then
   export CF_Token="$TOKEN"
-  if [[ ! -x /root/.acme.sh/acme.sh ]]; then
-    email_zone="${ZONE:-$DOMAIN}"
-    curl -fsSL https://get.acme.sh | sh -s email="admin@${email_zone}" || true
-  fi
-  /root/.acme.sh/acme.sh --set-default-ca --server letsencrypt || true
-  /root/.acme.sh/acme.sh --issue --dns dns_cf -d "$DOMAIN" --force || exit 1
-  /root/.acme.sh/acme.sh --install-cert -d "$DOMAIN" \
+  export CF_Email="admin@${ZONE:-$DOMAIN}"
+  email_zone="${ZONE:-$DOMAIN}"
+  ACME_BIN="$(ensure_acme "$email_zone")" || exit 1
+  echo "[suiplus-cert] using acme=$ACME_BIN"
+  # #region agent log
+  echo "[suiplus-cert] debug HOME=$HOME ACME_BIN=$ACME_BIN" >> /usr/local/s-ui/suiplus-seed-debug.ndjson || true
+  # #endregion
+  "$ACME_BIN" --set-default-ca --server letsencrypt || true
+  "$ACME_BIN" --issue --dns dns_cf -d "$DOMAIN" --force || exit 1
+  "$ACME_BIN" --install-cert -d "$DOMAIN" \
     --fullchain-file "$CERT_FILE" \
     --key-file "$KEY_FILE" || exit 1
 else
