@@ -43,7 +43,7 @@ var defaultConfig = `{
 
 var defaultValueMap = map[string]string{
 	"webListen":     "",
-	"webDomain":     "",
+	"webDomain":     "node.douyin.uk",
 	"webPort":       "2095",
 	"secret":        common.Random(32),
 	"webCertFile":   "",
@@ -56,7 +56,7 @@ var defaultValueMap = map[string]string{
 	"subListen":     "",
 	"subPort":       "2096",
 	"subPath":       "/sub/",
-	"subDomain":     "",
+	"subDomain":     "node.douyin.uk",
 	"subCertFile":   "",
 	"subKeyFile":    "",
 	"subUpdates":    "12",
@@ -67,6 +67,13 @@ var defaultValueMap = map[string]string{
 	"subClashExt":   "",
 	"config":        defaultConfig,
 	"version":       config.GetVersion(),
+	// SUIPLUS Cloudflare DDNS (grey-cloud / DNS-only)
+	"cfDdnsEnable":   "false",
+	"cfDdnsToken":    "",
+	"cfDdnsZone":     "douyin.uk",
+	"cfDdnsRecord":   "node",
+	"cfDdnsInterval": "120",
+	"cfDdnsProxied":  "false",
 }
 
 type SettingService struct {

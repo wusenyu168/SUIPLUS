@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"os/exec"
 	"strconv"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/admin8800/s-ui/logger"
 	"github.com/admin8800/s-ui/service"
 	"github.com/admin8800/s-ui/util"
+	"github.com/admin8800/s-ui/util/common"
 
 	"github.com/gin-gonic/gin"
 )
@@ -318,6 +320,16 @@ func (a *ApiService) RestartApp(c *gin.Context) {
 	// Must be seconds: RestartPanel(3) is 3ns in Go and drops the HTTP response → Axios Network Error
 	err := a.PanelService.RestartPanel(3 * time.Second)
 	jsonMsg(c, "restartApp", err)
+}
+
+func (a *ApiService) IssueCert(c *gin.Context) {
+	script := "/usr/local/s-ui/scripts/suiplus_issue_cert.sh"
+	out, err := exec.Command("bash", script).CombinedOutput()
+	if err != nil {
+		jsonMsg(c, "issueCert", common.NewError(string(out), " | ", err.Error()))
+		return
+	}
+	jsonMsg(c, "issueCert", nil)
 }
 
 func (a *ApiService) RestartSb(c *gin.Context) {

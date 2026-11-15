@@ -10,6 +10,7 @@
     <v-tab value="t2">{{ $t('setting.sub') }}</v-tab>
     <v-tab value="t3">{{ $t('setting.jsonSub') }}</v-tab>
     <v-tab value="t4">{{ $t('setting.clashSub') }}</v-tab>
+    <v-tab value="t5">SUIPLUS</v-tab>
   </v-tabs>
   <v-card-text>
     <v-row align="center" justify="center" style="margin-bottom: 10px;">
@@ -72,6 +73,35 @@
             <v-text-field v-model="settings.timeLocation" :label="$t('setting.timeLoc')" hide-details></v-text-field>
           </v-col>
         </v-row>
+      </v-window-item>
+
+      <v-window-item value="t5">
+        <v-row>
+          <v-col cols="12" sm="6" md="4">
+            <v-switch color="primary" v-model="cfDdnsEnable" label="Cloudflare DDNS" hide-details />
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-switch color="primary" v-model="cfDdnsProxied" label="橙云代理(节点域名请关闭)" hide-details />
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-text-field v-model="settings.cfDdnsInterval" label="DDNS 间隔(秒)" hide-details type="number"></v-text-field>
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-text-field v-model="settings.cfDdnsToken" label="CF API Token" hide-details type="password"></v-text-field>
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-text-field v-model="settings.cfDdnsZone" label="Zone (如 douyin.uk)" hide-details></v-text-field>
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-text-field v-model="settings.cfDdnsRecord" label="记录名 (如 node)" hide-details></v-text-field>
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-btn color="primary" variant="tonal" @click="issueCert" :loading="certLoading">一键申请证书并绑定</v-btn>
+          </v-col>
+        </v-row>
+        <v-alert class="mt-4" type="info" variant="tonal" density="compact">
+          DDNS 仅更新 DNS（默认非橙云）。证书写入 webCertFile/webKeyFile，保存后请重启面板。
+        </v-alert>
       </v-window-item>
 
       <v-window-item value="t2">
@@ -175,7 +205,14 @@ const settings = ref({
 	subURI: "",
   subJsonExt: "",
   subClashExt: "",
+  cfDdnsEnable: "false",
+  cfDdnsToken: "",
+  cfDdnsZone: "douyin.uk",
+  cfDdnsRecord: "node",
+  cfDdnsInterval: "120",
+  cfDdnsProxied: "false",
 })
+const certLoading = ref(false)
 
 onMounted(async () => {
   loading.value = true
@@ -252,6 +289,36 @@ const subShowInfo = computed({
   get: () => { return settings.value.subShowInfo == "true" },
   set: (v:boolean) => { settings.value.subShowInfo = v ? "true" : "false" }
 })
+
+const cfDdnsEnable = computed({
+  get: () => { return settings.value.cfDdnsEnable == "true" },
+  set: (v:boolean) => { settings.value.cfDdnsEnable = v ? "true" : "false" }
+})
+
+const cfDdnsProxied = computed({
+  get: () => { return settings.value.cfDdnsProxied == "true" },
+  set: (v:boolean) => { settings.value.cfDdnsProxied = v ? "true" : "false" }
+})
+
+const issueCert = async () => {
+  certLoading.value = true
+  const msg = await HttpUtils.post('api/issueCert', {})
+  if (msg.success) {
+    push.success({
+      title: i18n.global.t('success'),
+      duration: 5000,
+      message: '证书已申请并绑定，请保存后重启面板'
+    })
+    await loadData()
+  } else {
+    push.error({
+      title: i18n.global.t('error'),
+      duration: 8000,
+      message: msg.msg || '证书申请失败（也可 SSH 运行 /usr/local/s-ui/scripts/suiplus_issue_cert.sh）'
+    })
+  }
+  certLoading.value = false
+}
 
 const webPort = computed({
   get: () => { return settings.value.webPort.length>0 ? parseInt(settings.value.webPort) : 2095 },

@@ -62,23 +62,80 @@ install_base() {
     command -v tar >/dev/null || { echo -e "${red}缺少 tar${plain}"; exit 1; }
 }
 
+install_suiplus_helpers() {
+    mkdir -p /usr/local/s-ui/scripts
+    # Prefer files shipped in release tarball; else pull from GitHub raw
+    if [[ -f /usr/local/s-ui/scripts/suiplus_seed.py ]]; then
+        :
+    else
+        curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/scripts/suiplus_seed.py" \
+            -o /usr/local/s-ui/scripts/suiplus_seed.py 2>/dev/null || true
+        curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/scripts/suiplus_cf_ddns.py" \
+            -o /usr/local/s-ui/scripts/suiplus_cf_ddns.py 2>/dev/null || true
+        curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/scripts/suiplus_issue_cert.sh" \
+            -o /usr/local/s-ui/scripts/suiplus_issue_cert.sh 2>/dev/null || true
+    fi
+    chmod +x /usr/local/s-ui/scripts/*.py /usr/local/s-ui/scripts/*.sh 2>/dev/null || true
+
+    curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/scripts/suiplus-cf-ddns.service" \
+        -o /etc/systemd/system/suiplus-cf-ddns.service 2>/dev/null || true
+    curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/scripts/suiplus-cf-ddns.timer" \
+        -o /etc/systemd/system/suiplus-cf-ddns.timer 2>/dev/null || true
+    if [[ -f /etc/systemd/system/suiplus-cf-ddns.timer ]]; then
+        systemctl daemon-reload
+        systemctl enable --now suiplus-cf-ddns.timer 2>/dev/null || true
+    fi
+}
+
 config_after_install() {
     echo -e "${yellow}正在迁移...${plain}"
     /usr/local/s-ui/sui migrate 2>/dev/null || true
 
-    echo -e "${yellow}安装完成。建议修改面板端口/路径/管理员账号${plain}"
-    if [[ ! -f "/usr/local/s-ui/db/s-ui.db" ]]; then
-        local usernameTemp passwordTemp
-        usernameTemp=$(head -c 6 /dev/urandom | base64 | tr -d '/+=' | head -c 8)
-        passwordTemp=$(head -c 6 /dev/urandom | base64 | tr -d '/+=' | head -c 8)
-        echo -e "###############################################"
-        echo -e "${green}用户名：${usernameTemp}${plain}"
-        echo -e "${green}密码：${passwordTemp}${plain}"
-        echo -e "###############################################"
-        /usr/local/s-ui/sui admin -username "${usernameTemp}" -password "${passwordTemp}" 2>/dev/null || true
-    else
-        echo -e "${yellow}检测到已有数据库，保留原账号与入站配置${plain}"
+    # Start once so InitDB creates admin/admin if DB is new
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl start s-ui 2>/dev/null || /usr/local/s-ui/sui run >/dev/null 2>&1 &
+    sleep 2
+    systemctl stop s-ui 2>/dev/null || true
+    pkill -f '/usr/local/s-ui/sui' 2>/dev/null || true
+    sleep 1
+
+    local had_db=0
+    [[ -f "/usr/local/s-ui/db/s-ui.db" ]] && had_db=1
+
+    # Default credentials: always admin / admin on fresh install print
+    echo -e "###############################################"
+    echo -e "${green}面板默认账号${plain}"
+    echo -e "${green}用户名：admin${plain}"
+    echo -e "${green}密码：admin${plain}"
+    echo -e "###############################################"
+    /usr/local/s-ui/sui admin -username admin -password admin 2>/dev/null || true
+
+    install_suiplus_helpers
+
+    # Fresh DB or empty inbounds → seed 5 TUD nodes + Addrs
+    # SUIPLUS_FORCE_SEED=1 强制重建入站
+    if [[ -f /usr/local/s-ui/scripts/suiplus_seed.py ]]; then
+        if command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1; then
+            local py=python3
+            command -v python3 >/dev/null 2>&1 || py=python
+            command -v openssl >/dev/null 2>&1 || apt-get install -y -q openssl >/dev/null 2>&1 || true
+            local seed_args=(--db /usr/local/s-ui/db/s-ui.db --domain "${SUIPLUS_DOMAIN:-node.douyin.uk}")
+            [[ "${SUIPLUS_FORCE_SEED:-0}" == "1" ]] && seed_args+=(--force)
+            SUIPLUS_DOMAIN="${SUIPLUS_DOMAIN:-node.douyin.uk}" \
+                $py /usr/local/s-ui/scripts/suiplus_seed.py "${seed_args[@]}" \
+                || echo -e "${yellow}种子入站执行失败（可稍后手动运行 scripts/suiplus_seed.py）${plain}"
+        else
+            echo -e "${yellow}未找到 python3，跳过默认入站种子${plain}"
+        fi
     fi
+
+    if [[ "$had_db" -eq 1 ]]; then
+        echo -e "${yellow}若库中已有入站则不会覆盖；强制重建可运行：${plain}"
+        echo -e "  python3 /usr/local/s-ui/scripts/suiplus_seed.py --force"
+    fi
+
+    echo -e "${yellow}证书一键申请：bash /usr/local/s-ui/scripts/suiplus_issue_cert.sh${plain}"
+    echo -e "${yellow}DDNS：设置页填写 CF Token 并打开 cfDdnsEnable，或改 settings 后由 timer 同步${plain}"
 }
 
 prepare_services() {
@@ -158,6 +215,11 @@ install_suiplus() {
 
     cp -rf s-ui /usr/local/
     cp -f s-ui/*.service /etc/systemd/system/ 2>/dev/null || true
+    # ship helper scripts if present in tarball layout
+    mkdir -p /usr/local/s-ui/scripts
+    if [[ -d /tmp/s-ui/scripts ]]; then
+        cp -f /tmp/s-ui/scripts/* /usr/local/s-ui/scripts/ 2>/dev/null || true
+    fi
     rm -rf s-ui
 
     config_after_install
@@ -165,6 +227,10 @@ install_suiplus() {
     systemctl enable s-ui --now
 
     echo -e "${green}SUIPLUS 安装完成（包版本标签：${ver}）${plain}"
+    echo -e "###############################################"
+    echo -e "${green}用户名：admin${plain}"
+    echo -e "${green}密码：admin${plain}"
+    echo -e "###############################################"
     /usr/local/s-ui/sui uri 2>/dev/null || true
     echo ""
     s-ui help 2>/dev/null || true

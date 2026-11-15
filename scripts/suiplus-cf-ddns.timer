@@ -1,0 +1,12 @@
+[Unit]
+Description=SUIPLUS Cloudflare DDNS timer
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+AccuracySec=30s
+Persistent=true
+Unit=suiplus-cf-ddns.service
+
+[Install]
+WantedBy=timers.target

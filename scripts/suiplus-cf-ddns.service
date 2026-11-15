@@ -1,0 +1,9 @@
+[Unit]
+Description=SUIPLUS Cloudflare DDNS once
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/s-ui/scripts/suiplus_cf_ddns.py
+Nice=10
