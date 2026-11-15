@@ -192,6 +192,15 @@ def upsert_setting(cur: sqlite3.Cursor, key: str, value: str) -> None:
         cur.execute("INSERT INTO settings(key, value) VALUES(?, ?)", (key, value))
 
 
+def jblob(obj) -> bytes:
+    """Store JSON as SQLite BLOB so Go json.RawMessage can Scan it."""
+    if isinstance(obj, (bytes, bytearray)):
+        return bytes(obj)
+    if isinstance(obj, str):
+        return obj.encode("utf-8")
+    return json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
+
+
 def ensure_admin(cur: sqlite3.Cursor) -> None:
     cur.execute("SELECT id FROM users ORDER BY id LIMIT 1")
     row = cur.fetchone()
@@ -279,20 +288,17 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
 
     cur.execute(
         "INSERT INTO tls(name, server, client) VALUES(?,?,?)",
-        ("TLS", json.dumps(tls_server, ensure_ascii=False, indent=2),
-         json.dumps(tls_client, ensure_ascii=False, indent=2)),
+        ("TLS", jblob(tls_server), jblob(tls_client)),
     )
     tls_id = cur.lastrowid
     cur.execute(
         "INSERT INTO tls(name, server, client) VALUES(?,?,?)",
-        ("Reality", json.dumps(reality_server, ensure_ascii=False, indent=2),
-         json.dumps(reality_client, ensure_ascii=False, indent=2)),
+        ("Reality", jblob(reality_server), jblob(reality_client)),
     )
     reality_id = cur.lastrowid
     cur.execute(
         "INSERT INTO tls(name, server, client) VALUES(?,?,?)",
-        ("AnyTLS-tls", json.dumps(any_server, ensure_ascii=False, indent=2),
-         json.dumps(any_client, ensure_ascii=False, indent=2)),
+        ("AnyTLS-tls", jblob(any_server), jblob(any_client)),
     )
     any_id = cur.lastrowid
 
@@ -453,12 +459,13 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
                 sp["type"],
                 sp["tag"],
                 sp["tls_id"],
-                json.dumps(per_addrs, ensure_ascii=False, indent=2),
-                json.dumps(sp["out_json"], ensure_ascii=False, indent=2),
-                json.dumps(sp["options"], ensure_ascii=False, indent=2),
+                jblob(per_addrs),
+                jblob(sp["out_json"]),
+                jblob(sp["options"]),
             ),
         )
         inbound_ids.append(int(cur.lastrowid))
+    dbg("B", "suiplus_seed.py:seed", "inbounds_inserted_as_blob", {"count": len(inbound_ids)})
 
     client_name = "default"
     client_cfg = {
@@ -486,9 +493,9 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
         (
             1,
             client_name,
-            json.dumps(client_cfg, ensure_ascii=False),
-            json.dumps(inbound_ids, ensure_ascii=False, indent=2),
-            "[]",
+            jblob(client_cfg),
+            jblob(inbound_ids),
+            jblob([]),
             0,
             0,
             0,
