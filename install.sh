@@ -97,6 +97,36 @@ install_suiplus_helpers() {
     fi
 }
 
+enable_bbr_auto() {
+    # Soft-fail: never abort install if kernel lacks BBR
+    if [[ "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || true)" == "bbr" ]]; then
+        echo -e "${green}BBR 已启用${plain}"
+        return 0
+    fi
+    modprobe tcp_bbr 2>/dev/null || true
+    if ! grep -qw bbr /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null; then
+        echo -e "${yellow}当前内核未提供 BBR，跳过自动开启${plain}"
+        return 0
+    fi
+    touch /etc/sysctl.conf
+    grep -q '^net.core.default_qdisc=fq$' /etc/sysctl.conf 2>/dev/null || \
+        echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf
+    grep -q '^net.ipv4.tcp_congestion_control=bbr$' /etc/sysctl.conf 2>/dev/null || \
+        echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf
+    # Prefer dedicated drop-in so later OS updates are less likely to wipe it
+    mkdir -p /etc/sysctl.d
+    cat >/etc/sysctl.d/99-suiplus-bbr.conf <<'EOF'
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+EOF
+    sysctl -p /etc/sysctl.d/99-suiplus-bbr.conf >/dev/null 2>&1 || sysctl -p >/dev/null 2>&1 || true
+    if [[ "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || true)" == "bbr" ]]; then
+        echo -e "${green}已自动开启 BBR（qdisc=fq）${plain}"
+    else
+        echo -e "${yellow}尝试开启 BBR 未生效，可稍后用 s-ui 菜单手动开启${plain}"
+    fi
+}
+
 config_after_install() {
     echo -e "${yellow}正在迁移...${plain}"
     /usr/local/s-ui/sui migrate 2>/dev/null || true
@@ -237,6 +267,7 @@ install_suiplus() {
     config_after_install
     prepare_services
     systemctl enable s-ui --now
+    enable_bbr_auto
 
     echo -e "${green}SUIPLUS 安装完成（包版本标签：${ver}）${plain}"
     echo -e "###############################################"

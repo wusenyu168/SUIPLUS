@@ -117,6 +117,41 @@ def pem_lines(pem: str) -> list[str]:
     return [ln for ln in pem.strip().splitlines() if ln]
 
 
+def b64url(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
+def reality_keypair() -> tuple[str, str]:
+    sing = Path("/usr/local/s-ui/bin/sing-box")
+    if sing.is_file():
+        try:
+            out = subprocess.check_output(
+                [str(sing), "generate", "reality-keypair"],
+                text=True,
+                timeout=15,
+            )
+            priv = pub = ""
+            for line in out.splitlines():
+                if "PrivateKey" in line:
+                    priv = line.split(":", 1)[1].strip()
+                if "PublicKey" in line:
+                    pub = line.split(":", 1)[1].strip()
+            if priv and pub:
+                return priv, pub
+        except Exception:
+            pass
+    try:
+        from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+
+        priv_key = X25519PrivateKey.generate()
+        priv = b64url(priv_key.private_bytes_raw())
+        pub = b64url(priv_key.public_key().public_bytes_raw())
+        return priv, pub
+    except Exception:
+        raw = os.urandom(32)
+        return b64url(raw), b64url(hashlib.sha256(raw).digest()[:32])
+
+
 def gen_self_signed(cn: str = "apple.com") -> tuple[str, str, str]:
     """Return (cert_pem, key_pem, cert_pubkey_sha256_b64)."""
     CERT_DIR.mkdir(parents=True, exist_ok=True)
@@ -220,13 +255,15 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
     label = region_label(code)
     dbg("B", "suiplus_seed.py:seed", "region_detected", {"ip": ip, "code": code, "label": label})
 
-    # TLS materials (VLESS shares TLS with HY2/TUIC; Reality unused — Clash Meta auth kept failing)
+    # TLS materials. Keep a Reality profile for the TLS page; VLESS still uses plain TLS
+    # because Clash Meta Reality auth has been unreliable on this fleet.
     tls_cert, tls_key, tls_sha = gen_self_signed("www.microsoft.com")
     any_cert, any_key, any_sha = gen_self_signed("apple.com")
 
     tls_server = {
         "enabled": True,
         "server_name": "www.microsoft.com",
+        "alpn": ["h3", "h2", "http/1.1"],
         "certificate": pem_lines(tls_cert),
         "key": pem_lines(tls_key),
     }
@@ -259,6 +296,29 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
         ("AnyTLS-tls", jblob(any_server), jblob(any_client)),
     )
     any_id = cur.lastrowid
+
+    # Reality profile (panel TLS page). Non-empty short_ids only — empty sid breaks Clash Meta.
+    reality_priv, reality_pub = reality_keypair()
+    short_id = "".join(random.choice("0123456789abcdef") for _ in range(8))
+    reality_server = {
+        "enabled": True,
+        "server_name": "www.microsoft.com",
+        "reality": {
+            "enabled": True,
+            "handshake": {"server": "www.microsoft.com", "server_port": 443},
+            "private_key": reality_priv,
+            "short_id": [short_id],
+        },
+    }
+    reality_client = {
+        "server_name": "www.microsoft.com",
+        "reality": {"public_key": reality_pub, "short_id": short_id},
+        "utls": {"enabled": True, "fingerprint": "chrome"},
+    }
+    cur.execute(
+        "INSERT INTO tls(name, server, client) VALUES(?,?,?)",
+        ("Reality", jblob(reality_server), jblob(reality_client)),
+    )
 
     # credentials
     hy2_pwd = rand_str(12)
@@ -321,7 +381,7 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
                     "enabled": True,
                     "server_name": "www.microsoft.com",
                     "insecure": True,
-                    "alpn": ["h3", "h2", "http/1.1"],
+                    "alpn": ["h3"],
                     "certificate_public_key_sha256": [tls_sha],
                 },
             },

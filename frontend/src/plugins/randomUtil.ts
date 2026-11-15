@@ -18,8 +18,12 @@ const RandomUtil = {
     const random = (highbits * 2 ** 21 + lowbits) / (Number.MAX_SAFE_INTEGER + 1)
     return Math.floor(random * (max - min + 1) + min)
   },
+  // n = number of possibilities; returns 0 .. n-1 (exclusive upper bound).
+  // Old inclusive randomIntRange(0,n) made seq[this.randomInt(62)] hit seq[62] === undefined,
+  // which string-coerces to the literal "undefined" inside generated passwords.
   randomInt(n: number) {
-    return this.randomIntRange(0, n)
+    if (n <= 0) return 0
+    return this.randomIntRange(0, n - 1)
   },
   randomSeq(count: number): string {
     if (count <= 0) {
@@ -27,7 +31,7 @@ const RandomUtil = {
     }
     let str = ''
     for (let i = 0; i < count; ++i) {
-        str += seq[this.randomInt(62)]
+        str += seq[this.randomInt(seq.length)]
     }
     return str
   },

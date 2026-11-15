@@ -155,6 +155,7 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 					proxy["congestion-controller"] = congestion_control
 				}
 				proxy["udp"] = true
+				proxy["udp-relay-mode"] = "native"
 			}
 		case "trojan":
 			proxy["password"] = obMap["password"]
@@ -226,9 +227,15 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 				proxy["tls"] = tls["enabled"]
 			}
 
-			// ALPN if exists
+			// ALPN if exists. TUIC is QUIC — only h3 is valid; h2/http1.1 breaks some clients.
 			if alpn, ok := tls["alpn"].([]interface{}); ok {
-				proxy["alpn"] = alpn
+				if t == "tuic" {
+					proxy["alpn"] = []string{"h3"}
+				} else {
+					proxy["alpn"] = alpn
+				}
+			} else if t == "tuic" {
+				proxy["alpn"] = []string{"h3"}
 			}
 
 			// Add reality if exists
