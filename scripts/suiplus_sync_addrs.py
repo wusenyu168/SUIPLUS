@@ -1,16 +1,5 @@
 #!/usr/bin/env python3
-"""Sync inbound Addrs from settings (v2):
-
-SUI nodes (unchanged tag names):
-  - no webDomain → single addr = public IP, remark ""
-  - has webDomain (证书绑定域名) → single addr = domain only, remark ""
-    (域名模式，不用 IP，不改名成 CDN优选/IP)
-
-Prefer (梭哈式固定隧道优选1/2) when suiplusPreferEnable=true and webDomain set:
-  - extra addrs: cf.090227.xyz / cloudflare.182682.xyz
-  - remark "-优选1" / "-优选2"
-  - tls.server_name = panel domain（与固定隧道同域）
-"""
+"""Sync SUI inbound Addrs only (domain mode). Prefer nodes are separate inbounds."""
 from __future__ import annotations
 
 import json
@@ -24,19 +13,13 @@ from pathlib import Path
 DB = os.environ.get("SUI_DB", "/usr/local/s-ui/db/s-ui.db")
 DEBUG_LOG = Path("/usr/local/s-ui/suiplus-seed-debug.ndjson")
 
-# 梭哈式固定隧道优选域名（与 suoha-source 一致）
-SUOHA_PREFER = (
-    ("cf.090227.xyz", "-优选1"),
-    ("cloudflare.182682.xyz", "-优选2"),
-)
-
 
 def dbg(msg: str, data: dict | None = None) -> None:
     # #region agent log
     try:
         payload = {
             "sessionId": "0d09c0",
-            "runId": os.environ.get("SUIPLUS_RUN_ID", "sync-addrs-v2"),
+            "runId": os.environ.get("SUIPLUS_RUN_ID", "sync-addrs"),
             "hypothesisId": "C",
             "location": "suiplus_sync_addrs.py",
             "message": msg,
@@ -52,8 +35,7 @@ def dbg(msg: str, data: dict | None = None) -> None:
 
 
 def jblob(obj):
-    raw = json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
-    return sqlite3.Binary(raw)
+    return sqlite3.Binary(json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8"))
 
 
 def public_ip() -> str:
@@ -73,7 +55,7 @@ def settings(cur: sqlite3.Cursor) -> dict[str, str]:
     return {k: (v or "") for k, v in cur.fetchall()}
 
 
-def decode_blob(v) -> object:
+def decode_blob(v):
     if v is None:
         return None
     if isinstance(v, memoryview):
@@ -85,29 +67,8 @@ def decode_blob(v) -> object:
     return v
 
 
-def build_addrs(domain: str, ip: str, prefer: bool, port: int) -> list[dict]:
-    """SUI 主入口 + 可选梭哈式优选1/2。主入口 remark 为空 → 订阅名=入站 tag。"""
-    addrs: list[dict] = []
-
-    # SUI 主节点：有域名则域名模式；否则临时用 IP
-    if domain:
-        addrs.append({"server": domain, "server_port": port, "remark": ""})
-    elif ip:
-        addrs.append({"server": ip, "server_port": port, "remark": ""})
-
-    # 梭哈式固定隧道优选（不改动 SUI 主节点名）
-    if prefer and domain:
-        for host, remark in SUOHA_PREFER:
-            addrs.append(
-                {
-                    "server": host,
-                    "server_port": port,
-                    "remark": remark,
-                    # 固定隧道：SNI/证书域名仍用面板同域
-                    "tls": {"server_name": domain, "enabled": True},
-                }
-            )
-    return addrs
+def is_sui_tud(tag: str) -> bool:
+    return "-TUD-" in (tag or "")
 
 
 def main() -> int:
@@ -118,44 +79,26 @@ def main() -> int:
     cur = conn.cursor()
     s = settings(cur)
     domain = (s.get("webDomain") or "").strip()
-    cert = (s.get("webCertFile") or "").strip()
-    prefer = s.get("suiplusPreferEnable", "false").lower() in ("true", "1", "yes")
     ip = public_ip()
-    if not ip and not domain:
-        print("cannot detect public IP and no domain")
-        dbg("no_ip_no_domain", {})
+    primary = domain if domain else ip
+    if not primary:
+        print("no domain and no ip")
         return 1
 
-    if prefer and not domain:
-        print("prefer on but webDomain empty — skip 优选1/2, SUI stays IP/domain rule")
-        prefer = False
-
-    # 域名模式优先（有绑定域名即用域名；证书路径有则更好）
-    primary = domain if domain else ip
-    mode = "domain" if domain else "ip"
-    dbg(
-        "plan",
-        {
-            "mode": mode,
-            "domain": domain,
-            "has_cert": bool(cert),
-            "prefer": prefer,
-            "ip": ip,
-        },
-    )
-
-    cur.execute("SELECT id, tag, addrs, out_json, options FROM inbounds")
+    cur.execute("SELECT id, tag, out_json, options FROM inbounds")
     rows = cur.fetchall()
     updated = 0
-    for rid, tag, addrs_raw, out_raw, opt_raw in rows:
+    for rid, tag, out_raw, opt_raw in rows:
+        if not is_sui_tud(tag):
+            continue  # leave 梭哈 prefer inbounds alone
         opts = decode_blob(opt_raw) or {}
         port = int(opts.get("listen_port") or 0)
-        if not port:
-            out0 = decode_blob(out_raw) or {}
-            port = int(out0.get("server_port") or 0)
-        new_addrs = build_addrs(domain, ip, prefer, port)
         out = decode_blob(out_raw) or {}
-        if isinstance(out, dict) and primary:
+        if not port and isinstance(out, dict):
+            port = int(out.get("server_port") or 0)
+        # SUI: single addr, empty remark → subscribe name = tag (台湾-TUD-HY2)
+        new_addrs = [{"server": primary, "server_port": port, "remark": ""}]
+        if isinstance(out, dict):
             out["server"] = primary
             if port:
                 out["server_port"] = port
@@ -164,23 +107,46 @@ def main() -> int:
             (jblob(new_addrs), jblob(out), rid),
         )
         updated += 1
-        servers = [a.get("server") for a in new_addrs]
-        remarks = [a.get("remark") for a in new_addrs]
-        dbg("row", {"id": rid, "tag": tag, "servers": servers, "remarks": remarks})
+        dbg("sui_row", {"id": rid, "tag": tag, "server": primary, "port": port})
 
-    if "suiplusPreferEnable" not in s:
-        cur.execute(
-            "INSERT INTO settings(key,value) VALUES(?,?)",
-            ("suiplusPreferEnable", "false"),
-        )
+    # Strip mistaken TUD+优选 entries from stored client links (subscription source)
+    stripped = 0
+    prefer_hosts = ("cf.090227.xyz", "cloudflare.182682.xyz")
+    cur.execute("SELECT id, links FROM clients")
+    for cid, links_raw in cur.fetchall():
+        links = decode_blob(links_raw) or []
+        if not isinstance(links, list):
+            continue
+        new_links = []
+        for lk in links:
+            if not isinstance(lk, dict):
+                continue
+            if lk.get("type") == "local" and "-TUD-" in str(lk.get("remark") or ""):
+                uri = str(lk.get("uri") or "")
+                host = ""
+                try:
+                    if "@" in uri:
+                        host = uri.split("@", 1)[1].split("?", 1)[0].split("#", 1)[0].split(":")[0].lower()
+                except Exception:
+                    host = ""
+                frag = uri.split("#", 1)[1] if "#" in uri else ""
+                if host in prefer_hosts or "优选" in frag:
+                    stripped += 1
+                    continue
+            new_links.append(lk)
+        if new_links != links:
+            cur.execute("UPDATE clients SET links=? WHERE id=?", (jblob(new_links), cid))
+    dbg("strip_tud_prefer_links", {"stripped": stripped, "updated_inbounds": updated})
 
     conn.commit()
     conn.close()
-    print(
-        f"sync_addrs OK: mode={mode} prefer={prefer} domain={domain or '-'} "
-        f"ip={ip or '-'} updated={updated}"
-    )
-    dbg("done", {"mode": mode, "prefer": prefer, "domain": domain, "updated": updated})
+    print(f"sync_addrs OK: sui_domain_mode server={primary} updated={updated} stripped_tud_prefer_links={stripped}")
+    # also sync prefer inbounds
+    prefer = Path(__file__).with_name("suiplus_sync_prefer.py")
+    if prefer.is_file():
+        import subprocess
+
+        subprocess.call([sys.executable, str(prefer)])
     return 0
 
 
