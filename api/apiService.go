@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/admin8800/s-ui/database"
@@ -335,7 +336,43 @@ func (a *ApiService) IssueCert(c *gin.Context) {
 		jsonMsg(c, "issueCert", common.NewError(string(out), " | ", err.Error()))
 		return
 	}
-	jsonMsg(c, "issueCert", nil)
+	// Prefer fresh values from DB (script upserts webDomain + cert paths)
+	all, _ := a.SettingService.GetAllSetting()
+	result := map[string]string{}
+	if all != nil {
+		for _, k := range []string{"webDomain", "subDomain", "webCertFile", "webKeyFile", "subCertFile", "subKeyFile"} {
+			if v, ok := (*all)[k]; ok {
+				result[k] = v
+			}
+		}
+	}
+	// Fallback parse SUIPLUS_CERT_RESULT line
+	if result["webCertFile"] == "" {
+		for _, line := range strings.Split(string(out), "\n") {
+			if !strings.HasPrefix(line, "SUIPLUS_CERT_RESULT ") {
+				continue
+			}
+			for _, part := range strings.Fields(strings.TrimPrefix(line, "SUIPLUS_CERT_RESULT ")) {
+				kv := strings.SplitN(part, "=", 2)
+				if len(kv) != 2 {
+					continue
+				}
+				switch kv[0] {
+				case "domain":
+					result["webDomain"] = kv[1]
+					result["subDomain"] = kv[1]
+				case "cert":
+					result["webCertFile"] = kv[1]
+					result["subCertFile"] = kv[1]
+				case "key":
+					result["webKeyFile"] = kv[1]
+					result["subKeyFile"] = kv[1]
+				}
+			}
+		}
+	}
+	_ = exec.Command("python3", "/usr/local/s-ui/scripts/suiplus_sync_addrs.py").Run()
+	jsonMsgObj(c, "issueCert", result, nil)
 }
 
 func (a *ApiService) RestartSb(c *gin.Context) {

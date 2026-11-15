@@ -1,5 +1,6 @@
 #!/bin/bash
-# One-click ACME cert for panel domain (must already be set in settings.webDomain).
+# One-click ACME cert: use webDomain, or derive from cfDdnsRecord + cfDdnsZone.
+# On success writes webDomain / webCertFile / webKeyFile (and sub*) into settings.
 set -euo pipefail
 DB="${SUI_DB:-/usr/local/s-ui/db/s-ui.db}"
 CERT_DIR="${SUIPLUS_CERT_DIR:-/usr/local/s-ui/cert}"
@@ -9,15 +10,45 @@ get_setting() {
   sqlite3 "$DB" "SELECT value FROM settings WHERE key='$1' LIMIT 1;" 2>/dev/null || true
 }
 
+upsert_setting() {
+  local k="$1" v="$2"
+  local n
+  n=$(sqlite3 "$DB" "SELECT COUNT(*) FROM settings WHERE key='$k';")
+  if [[ "$n" == "0" ]]; then
+    sqlite3 "$DB" "INSERT INTO settings(key,value) VALUES('$k','$v');"
+  else
+    sqlite3 "$DB" "UPDATE settings SET value='$v' WHERE key='$k';"
+  fi
+}
+
 DOMAIN="$(get_setting webDomain)"
 DOMAIN="$(echo -n "$DOMAIN" | tr -d '\r\n ')"
 TOKEN="$(get_setting cfDdnsToken)"
 TOKEN="${CF_API_TOKEN:-$TOKEN}"
 ZONE="$(get_setting cfDdnsZone)"
 ZONE="$(echo -n "$ZONE" | tr -d '\r\n ')"
+RECORD="$(get_setting cfDdnsRecord)"
+RECORD="$(echo -n "$RECORD" | tr -d '\r\n ')"
+
+# Derive panel domain from DDNS fields when webDomain empty
+if [[ -z "$DOMAIN" ]]; then
+  if [[ -n "$ZONE" ]]; then
+    if [[ -z "$RECORD" || "$RECORD" == "@" ]]; then
+      DOMAIN="$ZONE"
+    elif [[ "$RECORD" == *.* ]]; then
+      # already FQDN mistakenly filled as record
+      DOMAIN="$RECORD"
+    else
+      DOMAIN="${RECORD}.${ZONE}"
+    fi
+    upsert_setting "webDomain" "$DOMAIN"
+    upsert_setting "subDomain" "$DOMAIN"
+    echo "[suiplus-cert] auto-filled webDomain=${DOMAIN} from DDNS fields"
+  fi
+fi
 
 if [[ -z "$DOMAIN" ]]; then
-  echo "[suiplus-cert] webDomain 为空：请先在面板「设置→域名」手动绑定本机域名后再申请证书" >&2
+  echo "[suiplus-cert] webDomain 为空：请在「界面」填域名，或在 SUIPLUS 填 Zone+记录名后再申请" >&2
   exit 1
 fi
 
@@ -53,15 +84,15 @@ fi
 chmod 600 "$KEY_FILE" 2>/dev/null || true
 chmod 644 "$CERT_FILE" 2>/dev/null || true
 
-for kv in "webCertFile|${CERT_FILE}" "webKeyFile|${KEY_FILE}" "subCertFile|${CERT_FILE}" "subKeyFile|${KEY_FILE}"; do
-  k="${kv%%|*}"; v="${kv#*|}"
-  n=$(sqlite3 "$DB" "SELECT COUNT(*) FROM settings WHERE key='$k';")
-  if [[ "$n" == "0" ]]; then
-    sqlite3 "$DB" "INSERT INTO settings(key,value) VALUES('$k','$v');"
-  else
-    sqlite3 "$DB" "UPDATE settings SET value='$v' WHERE key='$k';"
-  fi
-done
+upsert_setting "webDomain" "$DOMAIN"
+upsert_setting "subDomain" "$DOMAIN"
+upsert_setting "webCertFile" "$CERT_FILE"
+upsert_setting "webKeyFile" "$KEY_FILE"
+upsert_setting "subCertFile" "$CERT_FILE"
+upsert_setting "subKeyFile" "$KEY_FILE"
 
+echo "[suiplus-cert] bound webDomain=${DOMAIN}"
 echo "[suiplus-cert] bound webCertFile=${CERT_FILE}"
-echo "[suiplus-cert] restart panel to apply HTTPS: systemctl restart s-ui"
+echo "[suiplus-cert] bound webKeyFile=${KEY_FILE}"
+# machine-readable line for API
+echo "SUIPLUS_CERT_RESULT domain=${DOMAIN} cert=${CERT_FILE} key=${KEY_FILE}"

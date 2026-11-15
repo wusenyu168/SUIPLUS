@@ -108,7 +108,7 @@
           </v-col>
         </v-row>
         <v-alert class="mt-4" type="info" variant="tonal" density="compact">
-          DDNS 默认关；证书依赖已绑定的域名（DNS-01 需 Token）。保存设置后 timer 会同步 Addrs。
+          记录名只填主机名（如 node），Zone 填主域（如 douyin.uk）。节点域名请关闭橙云。一键证书会自动写入界面里的域名/证书路径。
         </v-alert>
       </v-window-item>
 
@@ -316,19 +316,33 @@ const suiplusPreferEnable = computed({
 
 const issueCert = async () => {
   certLoading.value = true
+  // Persist current SUIPLUS fields first so script can read Token/Zone/Record
+  await HttpUtils.post('api/save', { object: 'settings', action: 'set', data: JSON.stringify(settings.value) })
   const msg = await HttpUtils.post('api/issueCert', {})
   if (msg.success) {
+    const filled = (msg.obj || {}) as Record<string, string>
+    const applyFilled = () => {
+      if (filled.webDomain) settings.value.webDomain = filled.webDomain
+      if (filled.subDomain) settings.value.subDomain = filled.subDomain
+      if (filled.webCertFile) settings.value.webCertFile = filled.webCertFile
+      if (filled.webKeyFile) settings.value.webKeyFile = filled.webKeyFile
+      if (filled.subCertFile) settings.value.subCertFile = filled.subCertFile
+      if (filled.subKeyFile) settings.value.subKeyFile = filled.subKeyFile
+    }
+    applyFilled()
+    oldSettings.value = { ...settings.value }
     push.success({
       title: i18n.global.t('success'),
-      duration: 5000,
-      message: '证书已申请并绑定，请保存后重启面板'
+      duration: 8000,
+      message: `证书已绑定${filled.webDomain ? ' ' + filled.webDomain : ''}，路径已自动填入；请重启面板使 HTTPS 生效`
     })
     await loadData()
+    applyFilled()
   } else {
     push.error({
       title: i18n.global.t('error'),
-      duration: 8000,
-      message: msg.msg || '证书申请失败（也可 SSH 运行 /usr/local/s-ui/scripts/suiplus_issue_cert.sh）'
+      duration: 10000,
+      message: msg.msg || '证书申请失败'
     })
   }
   certLoading.value = false
