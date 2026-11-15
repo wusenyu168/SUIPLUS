@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cf-ddns"
+version = "1.0.0"
+description = "Cloudflare DDNS for dynamic VPS public IP"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["PyYAML>=6.0.1"]
+
+[project.scripts]
+cf-ddns = "cf_ddns.runner:main"
+
+[tool.setuptools.packages.find]
+include = ["cf_ddns*"]
