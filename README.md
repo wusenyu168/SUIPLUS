@@ -13,7 +13,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/wusenyu168/SUIPLUS/main/instal
 指定版本（需已发布 Release）：
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/wusenyu168/SUIPLUS/main/install.sh) v1.6.1
+bash <(curl -Ls https://raw.githubusercontent.com/wusenyu168/SUIPLUS/main/install.sh) v1.6.2
 ```
 
 安装后管理菜单：
@@ -44,7 +44,7 @@ s-ui
 本仓库 GitHub Actions（`.github/workflows/release.yml`）可构建并上传 Release。  
 有 Release 后，一键安装脚本会从本仓库下载对应架构的 `s-ui-linux-*.tar.gz`。
 
-手动触发：Actions → 发布 SUIPLUS → 填写 tag（如 `v1.6.1`）。
+手动触发：Actions → 发布 SUIPLUS → 填写 tag（如 `v1.6.2`）。
 
 ## 从源码构建
 

@@ -64,7 +64,8 @@ install_base() {
 
 install_suiplus_helpers() {
     mkdir -p /usr/local/s-ui/scripts
-    # Prefer files shipped in release tarball; else pull from GitHub raw
+    # Always refresh helpers from Git main so seed/Reality/BBR policy tracks source
+    # even when the Release binary tag lags a few commits behind.
     local helpers=(
         suiplus_seed.py
         suiplus_cf_ddns.py
@@ -77,9 +78,6 @@ install_suiplus_helpers() {
     )
     local f
     for f in "${helpers[@]}"; do
-        if [[ -f "/usr/local/s-ui/scripts/${f}" ]]; then
-            continue
-        fi
         curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/scripts/${f}" \
             -o "/usr/local/s-ui/scripts/${f}" 2>/dev/null || true
     done
