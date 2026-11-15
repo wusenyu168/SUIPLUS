@@ -310,6 +310,12 @@ func (a *ApiService) Save(c *gin.Context, loginUser string) {
 		jsonMsg(c, "save", err)
 		return
 	}
+	// After settings save, sync prefer/CDN Addrs from webDomain + suiplusPreferEnable
+	if obj == "settings" {
+		go func() {
+			_ = exec.Command("python3", "/usr/local/s-ui/scripts/suiplus_sync_addrs.py").Run()
+		}()
+	}
 	err = a.LoadPartialData(c, objs)
 	if err != nil {
 		jsonMsg(c, obj, err)

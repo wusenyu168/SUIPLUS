@@ -75,7 +75,8 @@ def decode_blob(v) -> object:
 def build_addrs(domain: str, ip: str, prefer: bool, port: int) -> list[dict]:
     addrs: list[dict] = []
     if prefer and domain:
-        addrs.append({"server": domain, "server_port": port, "remark": "-域名"})
+        # 与面板同域；走 CF CDN（橙云）时即套 CDN 的优选入口
+        addrs.append({"server": domain, "server_port": port, "remark": "-CDN优选"})
     if ip:
         addrs.append({"server": ip, "server_port": port, "remark": "-IP"})
     return addrs
