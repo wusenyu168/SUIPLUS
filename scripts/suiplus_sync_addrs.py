@@ -129,6 +129,17 @@ def main() -> int:
                 out["server_port"] = port
             if itype and not out.get("type"):
                 out["type"] = itype
+            # Keep protocol ALPNs coherent when multiple inbounds share one TLS profile.
+            # TUIC/QUIC needs h3 only; VLESS TCP needs h2/http1.1 — never collapse TLS to h3-only.
+            tls = out.get("tls") if isinstance(out.get("tls"), dict) else None
+            if tls is not None:
+                if itype == "tuic":
+                    tls["alpn"] = ["h3"]
+                elif itype == "vless":
+                    tls["alpn"] = ["h2", "http/1.1"]
+                elif itype == "hysteria2":
+                    tls["alpn"] = ["h3", "h2", "http/1.1"]
+                out["tls"] = tls
         cur.execute(
             "UPDATE inbounds SET addrs=?, out_json=?, options=? WHERE id=?",
             (jblob(new_addrs), jblob(out), jblob(opts), rid),

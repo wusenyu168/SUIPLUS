@@ -283,7 +283,7 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
         "alpn": ["h2"],
         "certificate_public_key_sha256": [any_sha],
         "insecure": True,
-        "server_name": "www.microsoft.com",
+        "server_name": "apple.com",
     }
 
     cur.execute(
