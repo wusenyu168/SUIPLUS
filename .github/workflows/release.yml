@@ -160,6 +160,23 @@ jobs:
           cp sui s-ui/
           cp s-ui.service s-ui/
           cp s-ui.sh s-ui/
+          # Ship SUIPLUS helpers in the same tarball so private-repo / offline installs
+          # still get seed, cert, DDNS, prefer/argo without raw.githubusercontent.
+          mkdir -p s-ui/scripts
+          for f in \
+            suiplus_seed.py \
+            suiplus_sync_addrs.py \
+            suiplus_sync_prefer.py \
+            suiplus_argo.sh \
+            suiplus_issue_cert.sh \
+            suiplus_cf_ddns.py \
+            suiplus-cf-ddns.service \
+            suiplus-cf-ddns.timer
+          do
+            if [ -f "scripts/$f" ]; then
+              cp "scripts/$f" s-ui/scripts/
+            fi
+          done
 
       - name: 打包
         run: tar -zcvf s-ui-linux-${{ matrix.platform }}.tar.gz s-ui

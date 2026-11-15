@@ -65,20 +65,32 @@ install_base() {
 install_suiplus_helpers() {
     mkdir -p /usr/local/s-ui/scripts
     # Prefer files shipped in release tarball; else pull from GitHub raw
-    if [[ -f /usr/local/s-ui/scripts/suiplus_seed.py ]]; then
-        :
-    else
-        for f in suiplus_seed.py suiplus_cf_ddns.py suiplus_sync_addrs.py suiplus_issue_cert.sh; do
-            curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/scripts/${f}" \
-                -o "/usr/local/s-ui/scripts/${f}" 2>/dev/null || true
-        done
-    fi
+    local helpers=(
+        suiplus_seed.py
+        suiplus_cf_ddns.py
+        suiplus_sync_addrs.py
+        suiplus_sync_prefer.py
+        suiplus_argo.sh
+        suiplus_issue_cert.sh
+        suiplus-cf-ddns.service
+        suiplus-cf-ddns.timer
+    )
+    local f
+    for f in "${helpers[@]}"; do
+        if [[ -f "/usr/local/s-ui/scripts/${f}" ]]; then
+            continue
+        fi
+        curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/scripts/${f}" \
+            -o "/usr/local/s-ui/scripts/${f}" 2>/dev/null || true
+    done
     chmod +x /usr/local/s-ui/scripts/*.py /usr/local/s-ui/scripts/*.sh 2>/dev/null || true
 
-    curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/scripts/suiplus-cf-ddns.service" \
-        -o /etc/systemd/system/suiplus-cf-ddns.service 2>/dev/null || true
-    curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/scripts/suiplus-cf-ddns.timer" \
-        -o /etc/systemd/system/suiplus-cf-ddns.timer 2>/dev/null || true
+    if [[ -f /usr/local/s-ui/scripts/suiplus-cf-ddns.service ]]; then
+        cp -f /usr/local/s-ui/scripts/suiplus-cf-ddns.service /etc/systemd/system/suiplus-cf-ddns.service
+    fi
+    if [[ -f /usr/local/s-ui/scripts/suiplus-cf-ddns.timer ]]; then
+        cp -f /usr/local/s-ui/scripts/suiplus-cf-ddns.timer /etc/systemd/system/suiplus-cf-ddns.timer
+    fi
     if [[ -f /etc/systemd/system/suiplus-cf-ddns.timer ]]; then
         systemctl daemon-reload
         systemctl enable --now suiplus-cf-ddns.timer 2>/dev/null || true
@@ -215,10 +227,10 @@ install_suiplus() {
 
     cp -rf s-ui /usr/local/
     cp -f s-ui/*.service /etc/systemd/system/ 2>/dev/null || true
-    # ship helper scripts if present in tarball layout
+    # Helpers (seed/cert/DDNS/prefer) live under s-ui/scripts in the release tarball
     mkdir -p /usr/local/s-ui/scripts
-    if [[ -d /tmp/s-ui/scripts ]]; then
-        cp -f /tmp/s-ui/scripts/* /usr/local/s-ui/scripts/ 2>/dev/null || true
+    if [[ -d s-ui/scripts ]]; then
+        cp -f s-ui/scripts/* /usr/local/s-ui/scripts/ 2>/dev/null || true
     fi
     rm -rf s-ui
 
