@@ -10,7 +10,7 @@
     <v-tab value="t2">{{ $t('setting.sub') }}</v-tab>
     <v-tab value="t3">{{ $t('setting.jsonSub') }}</v-tab>
     <v-tab value="t4">{{ $t('setting.clashSub') }}</v-tab>
-    <v-tab value="t5">SUIPLUS</v-tab>
+    <v-tab value="t5">域名证书</v-tab>
   </v-tabs>
   <v-card-text>
     <v-row align="center" justify="center" style="margin-bottom: 10px;">
@@ -104,11 +104,23 @@
             <v-text-field v-model="settings.cfDdnsRecord" label="记录名（如 node 或 @）" hide-details></v-text-field>
           </v-col>
           <v-col cols="12" sm="6" md="4">
-            <v-btn color="primary" variant="tonal" @click="issueCert" :loading="certLoading">一键申请证书并绑定</v-btn>
+            <v-btn color="primary" variant="tonal" @click="issueCert" :loading="certLoading" :disabled="certLoading">
+              一键申请证书并绑定
+            </v-btn>
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-btn
+              color="success"
+              variant="tonal"
+              @click="copyPanelLink"
+              :disabled="!certReady"
+            >
+              复制面板链接
+            </v-btn>
           </v-col>
         </v-row>
         <v-alert class="mt-4" type="info" variant="tonal" density="compact">
-          记录名只填主机名（如 node），Zone 填主域（如 douyin.uk）。节点域名请关闭橙云。一键证书会自动写入界面里的域名/证书路径。
+          记录名只填主机名（如 node），Zone 填主域（如 douyin.uk）。节点域名请关闭橙云。证书成功后「复制面板链接」才会可点，避免重复申请。
         </v-alert>
       </v-window-item>
 
@@ -223,6 +235,35 @@ const settings = ref({
 })
 const certLoading = ref(false)
 
+/** 证书已绑定：域名 + 证书/密钥路径齐全后，才允许复制面板链接 */
+const certReady = computed(() => {
+  return !!(
+    settings.value.webDomain &&
+    settings.value.webDomain.trim() &&
+    settings.value.webCertFile &&
+    settings.value.webCertFile.trim() &&
+    settings.value.webKeyFile &&
+    settings.value.webKeyFile.trim()
+  )
+})
+
+const panelLink = computed(() => {
+  const host = (settings.value.webDomain || '').trim()
+  if (!host) return ''
+  const isTLS = !!(settings.value.webCertFile || settings.value.webKeyFile)
+  let path = settings.value.webPath || '/app/'
+  if (!path.startsWith('/')) path = '/' + path
+  if (!path.endsWith('/')) path += '/'
+  let port = (settings.value.webPort || '2095').toString()
+  const protocol = isTLS ? 'https:' : 'http:'
+  if ((isTLS && port === '443') || (!isTLS && port === '80')) {
+    port = ''
+  } else {
+    port = `:${port}`
+  }
+  return `${protocol}//${host}${port}${path}`
+})
+
 onMounted(async () => {
   loading.value = true
   await loadData()
@@ -314,9 +355,27 @@ const suiplusPreferEnable = computed({
   set: (v:boolean) => { settings.value.suiplusPreferEnable = v ? "true" : "false" }
 })
 
+const copyPanelLink = async () => {
+  if (!certReady.value || !panelLink.value) {
+    push.error({ title: i18n.global.t('error'), duration: 4000, message: '请先成功申请并绑定证书' })
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(panelLink.value)
+    push.success({
+      title: i18n.global.t('success'),
+      duration: 5000,
+      message: '已复制：' + panelLink.value
+    })
+  } catch {
+    push.error({ title: i18n.global.t('error'), duration: 6000, message: '复制失败，请手动复制：' + panelLink.value })
+  }
+}
+
 const issueCert = async () => {
+  if (certLoading.value) return
   certLoading.value = true
-  // Persist current SUIPLUS fields first so script can read Token/Zone/Record
+  // Persist current fields first so script can read Token/Zone/Record
   await HttpUtils.post('api/save', { object: 'settings', action: 'set', data: JSON.stringify(settings.value) })
   const msg = await HttpUtils.post('api/issueCert', {})
   if (msg.success) {
@@ -334,7 +393,7 @@ const issueCert = async () => {
     push.success({
       title: i18n.global.t('success'),
       duration: 8000,
-      message: `证书已绑定${filled.webDomain ? ' ' + filled.webDomain : ''}，路径已自动填入；请重启面板使 HTTPS 生效`
+      message: `证书已绑定${filled.webDomain ? ' ' + filled.webDomain : ''}；「复制面板链接」已可用，请重启面板使 HTTPS 生效`
     })
     await loadData()
     applyFilled()
