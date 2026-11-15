@@ -134,6 +134,10 @@ func (j *JsonService) getOutbounds(clientConfig json.RawMessage, inbounds []*mod
 			return nil, nil, err
 		}
 		protocol, _ := outbound["type"].(string)
+		if protocol == "" && inData.Type != "" {
+			protocol = inData.Type
+			outbound["type"] = protocol
+		}
 
 		// Shadowsocks
 		if protocol == "shadowsocks" {
@@ -159,7 +163,10 @@ func (j *JsonService) getOutbounds(clientConfig json.RawMessage, inbounds []*mod
 		} else { // Other protocols
 			config, _ := configs[protocol].(map[string]interface{})
 			for key, value := range config {
-				if key == "name" || key == "alterId" || (key == "flow" && inData.TlsId == 0) {
+				if key == "name" || key == "alterId" {
+					continue
+				}
+				if key == "flow" && (inData.TlsId == 0 || value == "") {
 					continue
 				}
 				outbound[key] = value

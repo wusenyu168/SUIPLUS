@@ -19,6 +19,12 @@ from pathlib import Path
 DEFAULT_DB = "/usr/local/s-ui/db/s-ui.db"
 # Never pre-bind a domain: each VPS sets its own later in panel settings.
 DEFAULT_DOMAIN = ""
+# Avoid 443/80/16122: many VPS uplinks drop them. Use high ports that already work on this fleet.
+PORT_HY2 = 18443
+PORT_TUIC = 18446
+PORT_VLESS = 18445
+PORT_ANYTLS = 45738
+PORT_SS = 13495
 CERT_DIR = Path("/usr/local/s-ui/cert")
 DEBUG_LOG = Path("/usr/local/s-ui/suiplus-seed-debug.ndjson")
 
@@ -105,42 +111,6 @@ def detect_region(ip: str) -> str:
 
 def region_label(code: str) -> str:
     return REGION_CN.get(code.upper(), code.upper())
-
-
-def b64url(raw: bytes) -> str:
-    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
-
-
-def reality_keypair() -> tuple[str, str]:
-    sing = Path("/usr/local/s-ui/bin/sing-box")
-    if sing.is_file():
-        try:
-            out = subprocess.check_output(
-                [str(sing), "generate", "reality-keypair"],
-                text=True,
-                timeout=15,
-            )
-            priv = pub = ""
-            for line in out.splitlines():
-                if "PrivateKey" in line:
-                    priv = line.split(":", 1)[1].strip()
-                if "PublicKey" in line:
-                    pub = line.split(":", 1)[1].strip()
-            if priv and pub:
-                return priv, pub
-        except Exception:
-            pass
-    try:
-        from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
-
-        priv_key = X25519PrivateKey.generate()
-        priv = b64url(priv_key.private_bytes_raw())
-        pub = b64url(priv_key.public_key().public_bytes_raw())
-        return priv, pub
-    except Exception:
-        # last resort: openssl genpkey raw
-        raw = os.urandom(32)
-        return b64url(raw), b64url(hashlib.sha256(raw).digest()[:32])
 
 
 def pem_lines(pem: str) -> list[str]:
@@ -250,11 +220,9 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
     label = region_label(code)
     dbg("B", "suiplus_seed.py:seed", "region_detected", {"ip": ip, "code": code, "label": label})
 
-    # TLS materials
+    # TLS materials (VLESS shares TLS with HY2/TUIC; Reality unused — Clash Meta auth kept failing)
     tls_cert, tls_key, tls_sha = gen_self_signed("www.microsoft.com")
     any_cert, any_key, any_sha = gen_self_signed("apple.com")
-    reality_priv, reality_pub = reality_keypair()
-    short_id = "".join(random.choice("0123456789abcdef") for _ in range(8))
 
     tls_server = {
         "enabled": True,
@@ -266,19 +234,6 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
         "certificate_public_key_sha256": [tls_sha],
         "insecure": True,
         "server_name": "www.microsoft.com",
-    }
-    reality_server = {
-        "enabled": True,
-        "reality": {
-            "enabled": True,
-            "handshake": {"server": "apple.com", "server_port": 443},
-            "private_key": reality_priv,
-            "short_id": ["", short_id],
-        },
-    }
-    reality_client = {
-        "reality": {"public_key": reality_pub},
-        "utls": {"enabled": True, "fingerprint": "chrome"},
     }
     any_server = {
         "enabled": True,
@@ -299,11 +254,6 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
         ("TLS", jblob(tls_server), jblob(tls_client)),
     )
     tls_id = cur.lastrowid
-    cur.execute(
-        "INSERT INTO tls(name, server, client) VALUES(?,?,?)",
-        ("Reality", jblob(reality_server), jblob(reality_client)),
-    )
-    reality_id = cur.lastrowid
     cur.execute(
         "INSERT INTO tls(name, server, client) VALUES(?,?,?)",
         ("AnyTLS-tls", jblob(any_server), jblob(any_client)),
@@ -329,17 +279,18 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
             "type": "hysteria2",
             "tag": f"{label}-TUD-HY2",
             "tls_id": tls_id,
-            "port": 443,
+            "port": PORT_HY2,
             "options": {
                 "listen": "::",
-                "listen_port": 443,
+                "listen_port": PORT_HY2,
                 "ignore_client_bandwidth": True,
                 "obfs": {"type": "salamander", "password": hy2_obfs},
             },
             "out_json": {
+                "type": "hysteria2",
                 "tag": f"{label}-TUD-HY2",
                 "server": link_host,
-                "server_port": 443,
+                "server_port": PORT_HY2,
                 "obfs": {"type": "salamander", "password": hy2_obfs},
                 "tls": {
                     "enabled": True,
@@ -354,16 +305,17 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
             "type": "tuic",
             "tag": f"{label}-TUD-TUIC",
             "tls_id": tls_id,
-            "port": 16122,
+            "port": PORT_TUIC,
             "options": {
                 "listen": "::",
-                "listen_port": 16122,
+                "listen_port": PORT_TUIC,
                 "congestion_control": "bbr",
             },
             "out_json": {
+                "type": "tuic",
                 "tag": f"{label}-TUD-TUIC",
                 "server": link_host,
-                "server_port": 16122,
+                "server_port": PORT_TUIC,
                 "congestion_control": "bbr",
                 "tls": {
                     "enabled": True,
@@ -378,10 +330,10 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
             "type": "anytls",
             "tag": f"{label}-TUD-AnyTls",
             "tls_id": any_id,
-            "port": 45738,
+            "port": PORT_ANYTLS,
             "options": {
                 "listen": "::",
-                "listen_port": 45738,
+                "listen_port": PORT_ANYTLS,
                 "padding_scheme": [
                     "stop=8",
                     "0=30-30",
@@ -395,9 +347,10 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
                 ],
             },
             "out_json": {
+                "type": "anytls",
                 "tag": f"{label}-TUD-AnyTls",
                 "server": link_host,
-                "server_port": 45738,
+                "server_port": PORT_ANYTLS,
                 "tls": {
                     "enabled": True,
                     "server_name": "apple.com",
@@ -411,10 +364,10 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
             "type": "shadowsocks",
             "tag": f"{label}-TUD-SS",
             "tls_id": 0,
-            "port": 13495,
+            "port": PORT_SS,
             "options": {
                 "listen": "::",
-                "listen_port": 13495,
+                "listen_port": PORT_SS,
                 "method": "aes-256-gcm",
                 "password": ss_pwd,
                 "multiplex": {"enabled": True},
@@ -423,33 +376,31 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
                 "type": "shadowsocks",
                 "tag": f"{label}-TUD-SS",
                 "server": link_host,
-                "server_port": 13495,
+                "server_port": PORT_SS,
                 "method": "aes-256-gcm",
             },
         },
         {
             "type": "vless",
             "tag": f"{label}-TUD-VLESS",
-            "tls_id": reality_id,
-            "port": 443,
+            # Use normal TLS (same as HY2). Reality + Clash Meta on this fleet keeps failing auth.
+            "tls_id": tls_id,
+            "port": PORT_VLESS,
             "options": {
                 "listen": "::",
-                "listen_port": 443,
-                "transport": {},
+                "listen_port": PORT_VLESS,
             },
             "out_json": {
+                "type": "vless",
                 "tag": f"{label}-TUD-VLESS",
                 "server": link_host,
-                "server_port": 443,
+                "server_port": PORT_VLESS,
                 "tls": {
                     "enabled": True,
-                    "server_name": "apple.com",
+                    "server_name": "www.microsoft.com",
+                    "insecure": True,
+                    "alpn": ["h2", "http/1.1"],
                     "utls": {"enabled": True, "fingerprint": "chrome"},
-                    "reality": {
-                        "enabled": True,
-                        "public_key": reality_pub,
-                        "short_id": short_id,
-                    },
                 },
             },
         },
@@ -483,7 +434,7 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
         "tuic": {"name": client_name, "password": tuic_pwd, "uuid": tuic_uuid},
         "anytls": {"name": client_name, "password": any_pwd},
         "shadowsocks": {"name": client_name, "password": ss_pwd},
-        "vless": {"name": client_name, "uuid": vless_uuid, "flow": ""},
+        "vless": {"name": client_name, "uuid": vless_uuid},
         "vmess": {"name": client_name, "uuid": rand_uuid(), "alterId": 0},
         "trojan": {"name": client_name, "password": rand_str(12)},
         "socks": {"username": client_name, "password": rand_str(10)},

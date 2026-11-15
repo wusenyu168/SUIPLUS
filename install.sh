@@ -1,13 +1,13 @@
 #!/bin/bash
 # SUIPLUS 一键安装（基于 S-UI）
-# bash <(curl -Ls https://raw.githubusercontent.com/lindanbo1688-ctrl/SUIPLUS/main/install.sh)
+# bash <(curl -Ls https://raw.githubusercontent.com/wusenyu168/SUIPLUS/main/install.sh)
 
 red='\033[0;31m'
 green='\033[0;32m'
 yellow='\033[0;33m'
 plain='\033[0m'
 
-REPO="${SUIPLUS_REPO:-lindanbo1688-ctrl/SUIPLUS}"
+REPO="${SUIPLUS_REPO:-wusenyu168/SUIPLUS}"
 FALLBACK_REPO="${SUIPLUS_FALLBACK_REPO:-admin8800/s-ui}"
 
 [[ $EUID -ne 0 ]] && echo -e "${red}致命错误：${plain}请使用 root 权限运行此脚本\n" && exit 1
@@ -207,6 +207,7 @@ install_suiplus() {
     cp s-ui/s-ui.sh /usr/bin/s-ui
     # 菜单升级源指向 SUIPLUS
     sed -i "s|admin8800/s-ui|${REPO}|g" /usr/bin/s-ui s-ui/s-ui.sh 2>/dev/null || true
+    sed -i "s|wusenyu168/SUIPLUS|${REPO}|g" /usr/bin/s-ui s-ui/s-ui.sh 2>/dev/null || true
     sed -i "s|lindanbo1688-ctrl/SUIPLUS|${REPO}|g" /usr/bin/s-ui s-ui/s-ui.sh 2>/dev/null || true
 
     # 用仓库最新 install/管理脚本覆盖（若可拉取）

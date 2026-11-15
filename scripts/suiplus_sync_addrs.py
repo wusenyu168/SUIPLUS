@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import sys
 import urllib.request
@@ -12,6 +13,15 @@ from pathlib import Path
 
 DB = os.environ.get("SUI_DB", "/usr/local/s-ui/db/s-ui.db")
 DEBUG_LOG = Path("/usr/local/s-ui/suiplus-seed-debug.ndjson")
+# Uplink often drops 80/443/16122. Keep TUD nodes on high ports that already pass.
+REACHABLE_PORTS = {
+    "hysteria2": 18443,
+    "tuic": 18446,
+    "vless": 18445,
+    "anytls": 45738,
+    "shadowsocks": 13495,
+}
+FILTERED_LISTEN_PORTS = {80, 443, 16122}
 
 
 def dbg(msg: str, data: dict | None = None) -> None:
@@ -71,6 +81,17 @@ def is_sui_tud(tag: str) -> bool:
     return "-TUD-" in (tag or "")
 
 
+def effective_port(itype: str, port: int) -> int:
+    want = REACHABLE_PORTS.get(itype or "")
+    if want and (not port or port in FILTERED_LISTEN_PORTS):
+        return want
+    return port
+
+
+def rewrite_uri_port(uri: str, new_port: int) -> str:
+    return re.sub(r"(@[^:/?#]+):\d+", rf"\1:{new_port}", uri or "", count=1)
+
+
 def main() -> int:
     if not Path(DB).is_file():
         print(f"no db {DB}")
@@ -85,10 +106,11 @@ def main() -> int:
         print("no domain and no ip")
         return 1
 
-    cur.execute("SELECT id, tag, out_json, options FROM inbounds")
+    cur.execute("SELECT id, type, tag, out_json, options FROM inbounds")
     rows = cur.fetchall()
     updated = 0
-    for rid, tag, out_raw, opt_raw in rows:
+    tag_ports: dict[str, int] = {}
+    for rid, itype, tag, out_raw, opt_raw in rows:
         if not is_sui_tud(tag):
             continue  # leave 梭哈 prefer inbounds alone
         opts = decode_blob(opt_raw) or {}
@@ -96,18 +118,24 @@ def main() -> int:
         out = decode_blob(out_raw) or {}
         if not port and isinstance(out, dict):
             port = int(out.get("server_port") or 0)
+        port = effective_port(itype, port)
+        if isinstance(opts, dict) and port:
+            opts["listen_port"] = port
         # SUI: single addr, empty remark → subscribe name = tag (台湾-TUD-HY2)
         new_addrs = [{"server": primary, "server_port": port, "remark": ""}]
         if isinstance(out, dict):
             out["server"] = primary
             if port:
                 out["server_port"] = port
+            if itype and not out.get("type"):
+                out["type"] = itype
         cur.execute(
-            "UPDATE inbounds SET addrs=?, out_json=? WHERE id=?",
-            (jblob(new_addrs), jblob(out), rid),
+            "UPDATE inbounds SET addrs=?, out_json=?, options=? WHERE id=?",
+            (jblob(new_addrs), jblob(out), jblob(opts), rid),
         )
         updated += 1
-        dbg("sui_row", {"id": rid, "tag": tag, "server": primary, "port": port})
+        tag_ports[tag] = port
+        dbg("sui_row", {"id": rid, "tag": tag, "server": primary, "port": port, "type": itype})
 
     # Strip mistaken TUD+优选 entries from stored client links (subscription source)
     stripped = 0
@@ -133,6 +161,10 @@ def main() -> int:
                 if host in prefer_hosts or "优选" in frag:
                     stripped += 1
                     continue
+                remark = str(lk.get("remark") or "")
+                if remark in tag_ports:
+                    lk = dict(lk)
+                    lk["uri"] = rewrite_uri_port(uri, tag_ports[remark])
             new_links.append(lk)
         if new_links != links:
             cur.execute("UPDATE clients SET links=? WHERE id=?", (jblob(new_links), cid))

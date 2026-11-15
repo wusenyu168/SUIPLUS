@@ -145,7 +145,7 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 				proxy["cipher"] = "auto"
 			}
 			if t == "vless" {
-				if flow, ok := obMap["flow"].(string); ok {
+				if flow, ok := obMap["flow"].(string); ok && flow != "" {
 					proxy["flow"] = flow
 				}
 			}
@@ -154,6 +154,7 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 				if congestion_control, ok := obMap["congestion_control"].(string); ok {
 					proxy["congestion-controller"] = congestion_control
 				}
+				proxy["udp"] = true
 			}
 		case "trojan":
 			proxy["password"] = obMap["password"]
@@ -220,7 +221,10 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 			}
 		}
 		if isTls {
-			proxy["tls"] = tls["enabled"]
+			// tuic/hysteria already imply TLS; a bare tls:true field can confuse some Clash Meta builds.
+			if t != "tuic" && t != "hysteria" && t != "hysteria2" && t != "anytls" {
+				proxy["tls"] = tls["enabled"]
+			}
 
 			// ALPN if exists
 			if alpn, ok := tls["alpn"].([]interface{}); ok {

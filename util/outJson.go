@@ -111,7 +111,17 @@ func addTls(out *map[string]interface{}, tls *model.Tls) {
 		realityConfig := tlsConfig["reality"].(map[string]interface{})
 		realityConfig["enabled"] = true
 		if shortIDs, ok := reality["short_id"].([]interface{}); ok && len(shortIDs) > 0 {
-			realityConfig["short_id"] = shortIDs[common.RandomInt(len(shortIDs))]
+			// Prefer non-empty short_id; empty sid breaks many Clash Meta clients.
+			candidates := make([]interface{}, 0, len(shortIDs))
+			for _, sid := range shortIDs {
+				if s, ok := sid.(string); ok && s != "" {
+					candidates = append(candidates, sid)
+				}
+			}
+			if len(candidates) == 0 {
+				candidates = shortIDs
+			}
+			realityConfig["short_id"] = candidates[common.RandomInt(len(candidates))]
 		}
 		tlsConfig["reality"] = realityConfig
 	}

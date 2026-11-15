@@ -7,13 +7,13 @@
 ## 一键安装（Linux）
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/lindanbo1688-ctrl/SUIPLUS/main/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/wusenyu168/SUIPLUS/main/install.sh)
 ```
 
 指定版本（需已发布 Release）：
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/lindanbo1688-ctrl/SUIPLUS/main/install.sh) v1.0.0
+bash <(curl -Ls https://raw.githubusercontent.com/wusenyu168/SUIPLUS/main/install.sh) v1.6.0
 ```
 
 安装后管理菜单：
@@ -44,12 +44,12 @@ s-ui
 本仓库 GitHub Actions（`.github/workflows/release.yml`）可构建并上传 Release。  
 有 Release 后，一键安装脚本会从本仓库下载对应架构的 `s-ui-linux-*.tar.gz`。
 
-手动触发：Actions → 发布 S-UI / SUIPLUS → 填写 tag（如 `v1.0.0`）。
+手动触发：Actions → 发布 SUIPLUS → 填写 tag（如 `v1.6.0`）。
 
 ## 从源码构建
 
 ```bash
-git clone https://github.com/lindanbo1688-ctrl/SUIPLUS.git
+git clone https://github.com/wusenyu168/SUIPLUS.git
 cd SUIPLUS/frontend && npm install && npm run build && cd ..
 # 将 frontend/dist 放入 web/html 后：
 go build -o sui main.go
