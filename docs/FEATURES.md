@@ -1,42 +1,37 @@
 # SUIPLUS 功能规格
 
-## 1. Cloudflare DDNS（设置页，可开关）
+## 安装默认（多 VPS 通用）
 
-- `cfDdnsEnable`：默认关闭
-- Token / Zone / 记录名 / 间隔
-- 仅 DNS（非橙云），更新面板域名 A 记录
-- 关闭后不探测、不改 DNS
+- 账号：`admin` / `admin`
+- 按公网 IP 识别地区，自动创建 5 个入站（HY2/TUIC/AnyTLS/SS/VLESS）
+- **不预置任何域名**（`webDomain` / `subDomain` / DDNS Zone 为空）
+- 订阅/Addrs：**仅公网 IP**
+- `suiplusPreferEnable` 默认关闭
+- `cfDdnsEnable` 默认关闭
 
-## 2. 一键申请证书并绑定
+## 1. 手动绑定域名
 
-- 使用设置中的「域名」
-- ACME（优先 DNS-01 + CF Token）
-- 自动写入 `webCertFile` / `webKeyFile`（及同域订阅证书路径）
-- 需保存并重启面板使 HTTPS 生效
+在设置「界面 → 域名」填写**本机**域名并保存。每台 VPS 可不同。
 
-## 3. 默认入站种子（安装后自动）
+## 2. 优选 / 固定隧道（与面板同域）
 
-按公网 IP 识别地区码（同梭哈 `detect_region_code`），生成：
+- 开关：`suiplusPreferEnable`
+- 前提：已填写 `webDomain`
+- 开启后：Addrs = **面板同域** + 公网 IP；`out_json.server` 优先域名
+- 由 `suiplus_sync_addrs.py`（随 DDNS timer）同步
 
-| Tag 示例 | 协议 | 端口 |
-|---|---|---|
-| `{地区}-TUD-HY2` | hysteria2 | 443 |
-| `{地区}-TUD-TUIC` | tuic | 16122 |
-| `{地区}-TUD-AnyTls` | anytls | 45738 |
-| `{地区}-TUD-SS` | shadowsocks | 13495 |
-| `{地区}-TUD-VLESS` | vless Reality | 443 |
+## 3. Cloudflare DDNS
 
-模板参考用户备份库中的台湾-TUD 五入站。
+- `cfDdnsEnable` + Token / Zone / 记录名 / 间隔
+- 默认空，由操作者按该机域名填写
+- 仅 DNS（默认非橙云）
 
-## 4. 订阅多地址（优选简化版）
+## 4. 一键申请证书并绑定
 
-每个入站 `Addrs`：
-
-1. 面板域名（如 `node.douyin.uk`）
-2. 当前公网 IP
-
-CF 线路优选 IP 仅适用于走 Cloudflare 的协议，作为后期可选。
+- 依赖已绑定的 `webDomain`（为空则拒绝）
+- 优先 DNS-01（CF Token）；否则 HTTP-01
+- 写入 `webCertFile` / `webKeyFile`（及订阅证书路径）
 
 ## 5. 持久化
 
-UUID、端口、TLS/Reality、域名、证书路径、DDNS 配置均写入 SQLite；重启不丢。仅清库或强制重装才重置种子。
+UUID、端口、TLS/Reality、域名、证书路径、DDNS/优选开关均在 SQLite；重启不丢。仅清库或 `--force` 种子才重置入站。

@@ -77,6 +77,14 @@
 
       <v-window-item value="t5">
         <v-row>
+          <v-col cols="12">
+            <v-alert type="info" variant="tonal" density="compact" class="mb-2">
+              先在「界面」填写本机域名并保存；再开启优选（与面板同域）。未绑域名时订阅仅公网 IP。
+            </v-alert>
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-switch color="primary" v-model="suiplusPreferEnable" label="优选/固定隧道(同面板域名)" hide-details />
+          </v-col>
           <v-col cols="12" sm="6" md="4">
             <v-switch color="primary" v-model="cfDdnsEnable" label="Cloudflare DDNS" hide-details />
           </v-col>
@@ -90,17 +98,17 @@
             <v-text-field v-model="settings.cfDdnsToken" label="CF API Token" hide-details type="password"></v-text-field>
           </v-col>
           <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.cfDdnsZone" label="Zone (如 douyin.uk)" hide-details></v-text-field>
+            <v-text-field v-model="settings.cfDdnsZone" label="Zone（主域名，勿预填）" hide-details></v-text-field>
           </v-col>
           <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.cfDdnsRecord" label="记录名 (如 node)" hide-details></v-text-field>
+            <v-text-field v-model="settings.cfDdnsRecord" label="记录名（如 node 或 @）" hide-details></v-text-field>
           </v-col>
           <v-col cols="12" sm="6" md="4">
             <v-btn color="primary" variant="tonal" @click="issueCert" :loading="certLoading">一键申请证书并绑定</v-btn>
           </v-col>
         </v-row>
         <v-alert class="mt-4" type="info" variant="tonal" density="compact">
-          DDNS 仅更新 DNS（默认非橙云）。证书写入 webCertFile/webKeyFile，保存后请重启面板。
+          DDNS 默认关；证书依赖已绑定的域名（DNS-01 需 Token）。保存设置后 timer 会同步 Addrs。
         </v-alert>
       </v-window-item>
 
@@ -207,10 +215,11 @@ const settings = ref({
   subClashExt: "",
   cfDdnsEnable: "false",
   cfDdnsToken: "",
-  cfDdnsZone: "douyin.uk",
-  cfDdnsRecord: "node",
+  cfDdnsZone: "",
+  cfDdnsRecord: "",
   cfDdnsInterval: "120",
   cfDdnsProxied: "false",
+  suiplusPreferEnable: "false",
 })
 const certLoading = ref(false)
 
@@ -298,6 +307,11 @@ const cfDdnsEnable = computed({
 const cfDdnsProxied = computed({
   get: () => { return settings.value.cfDdnsProxied == "true" },
   set: (v:boolean) => { settings.value.cfDdnsProxied = v ? "true" : "false" }
+})
+
+const suiplusPreferEnable = computed({
+  get: () => { return settings.value.suiplusPreferEnable == "true" },
+  set: (v:boolean) => { settings.value.suiplusPreferEnable = v ? "true" : "false" }
 })
 
 const issueCert = async () => {

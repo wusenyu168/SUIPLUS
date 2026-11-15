@@ -17,7 +17,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 DEFAULT_DB = "/usr/local/s-ui/db/s-ui.db"
-DEFAULT_DOMAIN = "node.douyin.uk"
+# Never pre-bind a domain: each VPS sets its own later in panel settings.
+DEFAULT_DOMAIN = ""
 CERT_DIR = Path("/usr/local/s-ui/cert")
 DEBUG_LOG = Path("/usr/local/s-ui/suiplus-seed-debug.ndjson")
 
@@ -175,9 +176,10 @@ def gen_self_signed(cn: str = "apple.com") -> tuple[str, str, str]:
     return cert_pem, key_pem, sha
 
 
-def make_addrs(domain: str, ip: str) -> list[dict]:
+def make_addrs(domain: str, ip: str, prefer: bool = False) -> list[dict]:
+    """Install default: IP only. Domain row only when prefer+domain (same as panel)."""
     addrs: list[dict] = []
-    if domain:
+    if prefer and domain:
         addrs.append({"server": domain, "server_port": 0, "remark": "-域名"})
     if ip:
         addrs.append({"server": ip, "server_port": 0, "remark": "-IP"})
@@ -233,9 +235,9 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
     if inbound_count > 0 and not force:
         print("inbounds already present, skip seed (use --force to reset)")
         ensure_admin(cur)
-        upsert_setting(cur, "webDomain", domain)
+        # Do NOT overwrite webDomain — operator binds domain manually per VPS
         conn.commit()
-        dbg("A", "suiplus_seed.py:seed", "admin_ensured_skip_seed", {"domain": domain})
+        dbg("A", "suiplus_seed.py:seed", "admin_ensured_skip_seed", {"domain_arg": domain or ""})
         return 0
 
     if force and inbound_count > 0:
@@ -317,8 +319,10 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
     ss_pwd = rand_str(10)
     vless_uuid = rand_uuid()
 
-    addrs = make_addrs(domain, ip)
-    addrs_json = json.dumps(addrs, ensure_ascii=False, indent=2)
+    # Seed never enables prefer; links use public IP until operator binds domain + turns prefer on
+    link_host = ip or "127.0.0.1"
+    addrs = make_addrs("", ip, prefer=False)
+    dbg("C", "suiplus_seed.py:seed", "addrs_ip_only", {"ip": ip, "addrs_n": len(addrs), "domain_arg": domain or ""})
 
     specs = [
         {
@@ -334,7 +338,7 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
             },
             "out_json": {
                 "tag": f"{label}-TUD-HY2",
-                "server": domain,
+                "server": link_host,
                 "server_port": 443,
                 "obfs": {"type": "salamander", "password": hy2_obfs},
                 "tls": {
@@ -358,7 +362,7 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
             },
             "out_json": {
                 "tag": f"{label}-TUD-TUIC",
-                "server": domain,
+                "server": link_host,
                 "server_port": 16122,
                 "congestion_control": "bbr",
                 "tls": {
@@ -392,7 +396,7 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
             },
             "out_json": {
                 "tag": f"{label}-TUD-AnyTls",
-                "server": domain,
+                "server": link_host,
                 "server_port": 45738,
                 "tls": {
                     "enabled": True,
@@ -418,7 +422,7 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
             "out_json": {
                 "type": "shadowsocks",
                 "tag": f"{label}-TUD-SS",
-                "server": domain,
+                "server": link_host,
                 "server_port": 13495,
                 "method": "aes-256-gcm",
             },
@@ -435,7 +439,7 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
             },
             "out_json": {
                 "tag": f"{label}-TUD-VLESS",
-                "server": domain,
+                "server": link_host,
                 "server_port": 443,
                 "tls": {
                     "enabled": True,
@@ -518,25 +522,27 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
     )
 
     ensure_admin(cur)
-    upsert_setting(cur, "webDomain", domain)
-    upsert_setting(cur, "subDomain", domain)
-    # DDNS defaults (UI/cron consume these)
+    # Leave domain empty for multi-VPS; operator binds manually in Settings
+    upsert_setting(cur, "webDomain", "")
+    upsert_setting(cur, "subDomain", "")
     for k, v in {
         "cfDdnsEnable": "false",
         "cfDdnsToken": "",
-        "cfDdnsZone": "douyin.uk",
-        "cfDdnsRecord": "node",
+        "cfDdnsZone": "",
+        "cfDdnsRecord": "",
         "cfDdnsInterval": "120",
         "cfDdnsProxied": "false",
+        # 优选固定隧道：与面板同域；默认关，绑域名后再开
+        "suiplusPreferEnable": "false",
     }.items():
         upsert_setting(cur, k, v)
 
     conn.commit()
     conn.close()
 
-    print(f"SUIPLUS seed OK: region={label}({code}) ip={ip} domain={domain}")
+    print(f"SUIPLUS seed OK: region={label}({code}) ip={ip} domain=(empty, bind later)")
     print(f"  inbounds={len(inbound_ids)} tags={[s['tag'] for s in specs]}")
-    print("  admin=admin / admin")
+    print("  addrs=IP-only; prefer=off; admin via: sui admin -username admin -password admin")
     dbg(
         "C",
         "suiplus_seed.py:seed",
@@ -545,8 +551,9 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
             "inbound_ids": inbound_ids,
             "tags": [s["tag"] for s in specs],
             "addrs_count": len(addrs),
-            "domain": domain,
+            "domain": "",
             "ip": ip,
+            "prefer": False,
         },
     )
     return 0
@@ -555,10 +562,14 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
 def main() -> int:
     p = argparse.ArgumentParser(description="SUIPLUS DB seed")
     p.add_argument("--db", default=os.environ.get("SUI_DB", DEFAULT_DB))
-    p.add_argument("--domain", default=os.environ.get("SUIPLUS_DOMAIN", DEFAULT_DOMAIN))
+    p.add_argument(
+        "--domain",
+        default=os.environ.get("SUIPLUS_DOMAIN", DEFAULT_DOMAIN),
+        help="Ignored for binding; kept for compat. Domain must be set in panel.",
+    )
     p.add_argument("--force", action="store_true")
     args = p.parse_args()
-    return seed(args.db, args.domain, force=args.force)
+    return seed(args.db, args.domain or "", force=args.force)
 
 
 if __name__ == "__main__":

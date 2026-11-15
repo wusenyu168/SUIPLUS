@@ -68,12 +68,10 @@ install_suiplus_helpers() {
     if [[ -f /usr/local/s-ui/scripts/suiplus_seed.py ]]; then
         :
     else
-        curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/scripts/suiplus_seed.py" \
-            -o /usr/local/s-ui/scripts/suiplus_seed.py 2>/dev/null || true
-        curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/scripts/suiplus_cf_ddns.py" \
-            -o /usr/local/s-ui/scripts/suiplus_cf_ddns.py 2>/dev/null || true
-        curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/scripts/suiplus_issue_cert.sh" \
-            -o /usr/local/s-ui/scripts/suiplus_issue_cert.sh 2>/dev/null || true
+        for f in suiplus_seed.py suiplus_cf_ddns.py suiplus_sync_addrs.py suiplus_issue_cert.sh; do
+            curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/scripts/${f}" \
+                -o "/usr/local/s-ui/scripts/${f}" 2>/dev/null || true
+        done
     fi
     chmod +x /usr/local/s-ui/scripts/*.py /usr/local/s-ui/scripts/*.sh 2>/dev/null || true
 
@@ -111,11 +109,12 @@ config_after_install() {
             local py=python3
             command -v python3 >/dev/null 2>&1 || py=python
             command -v openssl >/dev/null 2>&1 || apt-get install -y -q openssl >/dev/null 2>&1 || true
-            local seed_args=(--db /usr/local/s-ui/db/s-ui.db --domain "${SUIPLUS_DOMAIN:-node.douyin.uk}")
+            local seed_args=(--db /usr/local/s-ui/db/s-ui.db)
             [[ "${SUIPLUS_FORCE_SEED:-0}" == "1" ]] && seed_args+=(--force)
-            SUIPLUS_DOMAIN="${SUIPLUS_DOMAIN:-node.douyin.uk}" \
-                $py /usr/local/s-ui/scripts/suiplus_seed.py "${seed_args[@]}" \
+            $py /usr/local/s-ui/scripts/suiplus_seed.py "${seed_args[@]}" \
                 || echo -e "${yellow}种子入站执行失败（可稍后手动运行 scripts/suiplus_seed.py）${plain}"
+            # Keep Addrs in sync with prefer/domain settings (IP-only until prefer on)
+            $py /usr/local/s-ui/scripts/suiplus_sync_addrs.py 2>/dev/null || true
         else
             echo -e "${yellow}未找到 python3，跳过默认入站种子${plain}"
         fi
