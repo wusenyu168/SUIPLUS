@@ -102,14 +102,6 @@ config_after_install() {
     local had_db=0
     [[ -f "/usr/local/s-ui/db/s-ui.db" ]] && had_db=1
 
-    # Default credentials: always admin / admin on fresh install print
-    echo -e "###############################################"
-    echo -e "${green}面板默认账号${plain}"
-    echo -e "${green}用户名：admin${plain}"
-    echo -e "${green}密码：admin${plain}"
-    echo -e "###############################################"
-    /usr/local/s-ui/sui admin -username admin -password admin 2>/dev/null || true
-
     install_suiplus_helpers
 
     # Fresh DB or empty inbounds → seed 5 TUD nodes + Addrs
@@ -128,6 +120,14 @@ config_after_install() {
             echo -e "${yellow}未找到 python3，跳过默认入站种子${plain}"
         fi
     fi
+
+    # Set AFTER seed (packaged binary stores bcrypt; do not write plaintext into DB)
+    /usr/local/s-ui/sui admin -username admin -password admin 2>/dev/null || true
+    echo -e "###############################################"
+    echo -e "${green}面板默认账号${plain}"
+    echo -e "${green}用户名：admin${plain}"
+    echo -e "${green}密码：admin${plain}"
+    echo -e "###############################################"
 
     if [[ "$had_db" -eq 1 ]]; then
         echo -e "${yellow}若库中已有入站则不会覆盖；强制重建可运行：${plain}"
