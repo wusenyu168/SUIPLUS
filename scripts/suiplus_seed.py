@@ -177,12 +177,12 @@ def gen_self_signed(cn: str = "apple.com") -> tuple[str, str, str]:
 
 
 def make_addrs(domain: str, ip: str, prefer: bool = False) -> list[dict]:
-    """Install default: IP only. Domain row only when prefer+domain (same as panel)."""
+    """Install: IP only until domain bound. remark empty → subscribe name = inbound tag."""
     addrs: list[dict] = []
-    if prefer and domain:
-        addrs.append({"server": domain, "server_port": 0, "remark": "-域名"})
-    if ip:
-        addrs.append({"server": ip, "server_port": 0, "remark": "-IP"})
+    if domain:
+        addrs.append({"server": domain, "server_port": 0, "remark": ""})
+    elif ip:
+        addrs.append({"server": ip, "server_port": 0, "remark": ""})
     return addrs
 
 

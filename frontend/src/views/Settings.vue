@@ -83,7 +83,7 @@
             </v-alert>
           </v-col>
           <v-col cols="12" sm="6" md="4">
-            <v-switch color="primary" v-model="suiplusPreferEnable" label="优选/固定隧道(同面板域名)" hide-details />
+            <v-switch color="primary" v-model="suiplusPreferEnable" label="梭哈式固定隧道优选1/2" hide-details />
           </v-col>
           <v-col cols="12" sm="6" md="4">
             <v-switch color="primary" v-model="cfDdnsEnable" label="Cloudflare DDNS" hide-details />

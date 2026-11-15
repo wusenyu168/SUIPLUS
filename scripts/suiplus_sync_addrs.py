@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
-"""Sync inbound Addrs from settings:
-- suiplusPreferEnable=false or empty webDomain → IP only
-- prefer on + webDomain set → domain (same as panel) + IP
-Also refresh out_json.server to match primary host.
+"""Sync inbound Addrs from settings (v2):
+
+SUI nodes (unchanged tag names):
+  - no webDomain → single addr = public IP, remark ""
+  - has webDomain (证书绑定域名) → single addr = domain only, remark ""
+    (域名模式，不用 IP，不改名成 CDN优选/IP)
+
+Prefer (梭哈式固定隧道优选1/2) when suiplusPreferEnable=true and webDomain set:
+  - extra addrs: cf.090227.xyz / cloudflare.182682.xyz
+  - remark "-优选1" / "-优选2"
+  - tls.server_name = panel domain（与固定隧道同域）
 """
 from __future__ import annotations
 
@@ -17,13 +24,19 @@ from pathlib import Path
 DB = os.environ.get("SUI_DB", "/usr/local/s-ui/db/s-ui.db")
 DEBUG_LOG = Path("/usr/local/s-ui/suiplus-seed-debug.ndjson")
 
+# 梭哈式固定隧道优选域名（与 suoha-source 一致）
+SUOHA_PREFER = (
+    ("cf.090227.xyz", "-优选1"),
+    ("cloudflare.182682.xyz", "-优选2"),
+)
+
 
 def dbg(msg: str, data: dict | None = None) -> None:
     # #region agent log
     try:
         payload = {
             "sessionId": "0d09c0",
-            "runId": os.environ.get("SUIPLUS_RUN_ID", "sync-addrs"),
+            "runId": os.environ.get("SUIPLUS_RUN_ID", "sync-addrs-v2"),
             "hypothesisId": "C",
             "location": "suiplus_sync_addrs.py",
             "message": msg,
@@ -73,12 +86,27 @@ def decode_blob(v) -> object:
 
 
 def build_addrs(domain: str, ip: str, prefer: bool, port: int) -> list[dict]:
+    """SUI 主入口 + 可选梭哈式优选1/2。主入口 remark 为空 → 订阅名=入站 tag。"""
     addrs: list[dict] = []
+
+    # SUI 主节点：有域名则域名模式；否则临时用 IP
+    if domain:
+        addrs.append({"server": domain, "server_port": port, "remark": ""})
+    elif ip:
+        addrs.append({"server": ip, "server_port": port, "remark": ""})
+
+    # 梭哈式固定隧道优选（不改动 SUI 主节点名）
     if prefer and domain:
-        # 与面板同域；走 CF CDN（橙云）时即套 CDN 的优选入口
-        addrs.append({"server": domain, "server_port": port, "remark": "-CDN优选"})
-    if ip:
-        addrs.append({"server": ip, "server_port": port, "remark": "-IP"})
+        for host, remark in SUOHA_PREFER:
+            addrs.append(
+                {
+                    "server": host,
+                    "server_port": port,
+                    "remark": remark,
+                    # 固定隧道：SNI/证书域名仍用面板同域
+                    "tls": {"server_name": domain, "enabled": True},
+                }
+            )
     return addrs
 
 
@@ -90,18 +118,32 @@ def main() -> int:
     cur = conn.cursor()
     s = settings(cur)
     domain = (s.get("webDomain") or "").strip()
+    cert = (s.get("webCertFile") or "").strip()
     prefer = s.get("suiplusPreferEnable", "false").lower() in ("true", "1", "yes")
     ip = public_ip()
-    if not ip:
-        print("cannot detect public IP")
-        dbg("no_ip", {})
+    if not ip and not domain:
+        print("cannot detect public IP and no domain")
+        dbg("no_ip_no_domain", {})
         return 1
 
     if prefer and not domain:
-        print("prefer on but webDomain empty — keep IP-only")
+        print("prefer on but webDomain empty — skip 优选1/2, SUI stays IP/domain rule")
         prefer = False
 
-    primary = domain if (prefer and domain) else ip
+    # 域名模式优先（有绑定域名即用域名；证书路径有则更好）
+    primary = domain if domain else ip
+    mode = "domain" if domain else "ip"
+    dbg(
+        "plan",
+        {
+            "mode": mode,
+            "domain": domain,
+            "has_cert": bool(cert),
+            "prefer": prefer,
+            "ip": ip,
+        },
+    )
+
     cur.execute("SELECT id, tag, addrs, out_json, options FROM inbounds")
     rows = cur.fetchall()
     updated = 0
@@ -113,7 +155,7 @@ def main() -> int:
             port = int(out0.get("server_port") or 0)
         new_addrs = build_addrs(domain, ip, prefer, port)
         out = decode_blob(out_raw) or {}
-        if isinstance(out, dict):
+        if isinstance(out, dict) and primary:
             out["server"] = primary
             if port:
                 out["server_port"] = port
@@ -122,9 +164,10 @@ def main() -> int:
             (jblob(new_addrs), jblob(out), rid),
         )
         updated += 1
-        dbg("row", {"id": rid, "tag": tag, "n": len(new_addrs), "primary": primary})
+        servers = [a.get("server") for a in new_addrs]
+        remarks = [a.get("remark") for a in new_addrs]
+        dbg("row", {"id": rid, "tag": tag, "servers": servers, "remarks": remarks})
 
-    # ensure prefer key exists
     if "suiplusPreferEnable" not in s:
         cur.execute(
             "INSERT INTO settings(key,value) VALUES(?,?)",
@@ -133,8 +176,11 @@ def main() -> int:
 
     conn.commit()
     conn.close()
-    print(f"sync_addrs OK: prefer={prefer} domain={domain or '-'} ip={ip} updated={updated}")
-    dbg("done", {"prefer": prefer, "domain": domain, "ip": ip, "updated": updated})
+    print(
+        f"sync_addrs OK: mode={mode} prefer={prefer} domain={domain or '-'} "
+        f"ip={ip or '-'} updated={updated}"
+    )
+    dbg("done", {"mode": mode, "prefer": prefer, "domain": domain, "updated": updated})
     return 0
 
 
