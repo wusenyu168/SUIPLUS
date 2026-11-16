@@ -169,6 +169,7 @@ jobs:
             suiplus_sync_prefer.py \
             suiplus_argo.sh \
             suiplus_issue_cert.sh \
+            suiplus_panel_hairpin.sh \
             suiplus_cf_ddns.py \
             suiplus-cf-ddns.service \
             suiplus-cf-ddns.timer

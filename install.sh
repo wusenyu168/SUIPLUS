@@ -73,6 +73,7 @@ install_suiplus_helpers() {
         suiplus_sync_prefer.py
         suiplus_argo.sh
         suiplus_issue_cert.sh
+        suiplus_panel_hairpin.sh
         suiplus-cf-ddns.service
         suiplus-cf-ddns.timer
     )
@@ -230,6 +231,8 @@ install_suiplus() {
     ver="${info%%|*}"
     url="${info#*|}"
 
+    echo -e "${yellow}一键安装/更新下载的是 GitHub Release 二进制（${ver}），不是 git clone 源码目录。${plain}"
+    echo -e "${yellow}请确保已发布与 config/version 一致的 Release（当前源码为 1.6.6 → 标签 v1.6.6），否则会装到旧包。${plain}"
     echo -e "下载：${url}"
     if ! wget -N --no-check-certificate -O "/tmp/s-ui-linux-${arch_name}.tar.gz" "${url}"; then
         echo -e "${red}下载失败${plain}"
