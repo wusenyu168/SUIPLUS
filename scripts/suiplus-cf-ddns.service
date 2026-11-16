@@ -1,0 +1,12 @@
+[Unit]
+Description=SUIPLUS Cloudflare DDNS once
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Keep Argo/cloudflared started by sync_prefer alive after this oneshot exits.
+# Default KillMode=control-group was SIGTERM-ing the Quick Tunnel every 2 minutes.
+KillMode=process
+ExecStart=/bin/bash -c '/usr/bin/python3 /usr/local/s-ui/scripts/suiplus_cf_ddns.py; /usr/bin/python3 /usr/local/s-ui/scripts/suiplus_sync_addrs.py'
+Nice=10

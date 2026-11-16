@@ -1,0 +1,40 @@
+.DS_Store
+dist/
+release/
+backup/
+bin/
+db/
+sui
+web/html
+main
+tmp
+.sync*
+*.tar.gz
+
+# local env files
+.env.local
+.env.*.local
+
+# Log files
+*.log*
+.cache
+
+# Local VPS debug helpers / secrets (never publish)
+scripts/_*
+scripts/*_out.txt
+.cursor/
+
+# Windows build artifacts
+*.exe
+*.zip
+s-ui-windows/
+sui-*.exe
+sui-*.zip
+windows/sui-*.exe
+
+# Editor directories and files
+.idea
+.vscode
+
+scripts/seed-template.json
+

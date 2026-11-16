@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" href="assets/favicon.ico" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script>
+    window.BASE_URL = "{{ .BASE_URL }}"
+
+    // Dev Mode
+    if (window.BASE_URL.charAt(0) === '{') window.BASE_URL = "/app/"
+  </script>
+  <title>S-UI</title>
+  <script type="module" crossorigin src="./assets/71a984c65145db63.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/89db1581fee33579.css">
+</head>
+
+<body>
+  <div id="app"></div>
+</body>
+
+</html>
