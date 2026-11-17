@@ -1,0 +1,12 @@
+[Unit]
+Description=SUIPLUS prefer/Argo health sync (rare; reuse keeps SNI)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+AccuracySec=1min
+Persistent=true
+Unit=suiplus-prefer.service
+
+[Install]
+WantedBy=timers.target

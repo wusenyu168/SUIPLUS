@@ -1,0 +1,12 @@
+[Unit]
+Description=SUIPLUS Cloudflare DDNS once (DNS only — no prefer/Argo)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Keep any unrelated child processes; this unit must never own Argo.
+KillMode=process
+# DDNS only. TUD addrs refresh without touching prefer/Argo.
+ExecStart=/bin/bash -c '/usr/bin/python3 /usr/local/s-ui/scripts/suiplus_cf_ddns.py; /usr/bin/python3 /usr/local/s-ui/scripts/suiplus_sync_addrs.py'
+Nice=10

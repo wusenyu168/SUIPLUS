@@ -1,0 +1,26 @@
+# Cloudflare API Token（Edit zone DNS / DNS:Edit + Zone:Read）
+# 也可用环境变量 CF_API_TOKEN，避免把 Token 写进文件
+api_token: "替换成你的Cloudflare_API_Token"
+
+# 主域名（Zone），例如 douyin.uk
+zone: "douyin.uk"
+
+# 主机记录：node → node.douyin.uk ；根域名填 @
+record: "node"
+
+# 节点/面板域名建议关闭橙云（仅 DNS）
+proxied: false
+
+# 1 = Auto TTL
+ttl: 1
+
+# 守护进程模式下的检查间隔（秒）
+interval_seconds: 120
+
+state_file: "/var/lib/cf-ddns/last_ip"
+log_file: "/var/log/cf-ddns.log"
+
+# 可选：自定义公网 IP 查询接口
+# ip_urls:
+#   - https://api64.ipify.org
+#   - https://ipv4.icanhazip.com

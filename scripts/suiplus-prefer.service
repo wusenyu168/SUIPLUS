@@ -1,0 +1,14 @@
+[Unit]
+Description=SUIPLUS prefer/Argo sync (oneshot, separated from DDNS)
+After=network-online.target s-ui.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Do not SIGTERM cloudflared/router started by sync_prefer when this unit exits.
+KillMode=process
+ExecStart=/usr/bin/python3 /usr/local/s-ui/scripts/suiplus_sync_prefer.py
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

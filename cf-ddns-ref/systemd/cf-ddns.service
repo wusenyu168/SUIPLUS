@@ -1,0 +1,13 @@
+[Unit]
+Description=Cloudflare DDNS one-shot sync
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/cf-ddns/.venv/bin/python -m cf_ddns -c /etc/cf-ddns/config.yaml once
+Nice=10
+
+[Install]
+WantedBy=multi-user.target
