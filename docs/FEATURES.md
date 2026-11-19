@@ -44,6 +44,10 @@
 - 开关：`pppoeEnable`
 - **关联域名** `pppoeProviderDomain` = VPS **服务商域名**（不是本面板 `webDomain`）
 - 账号 ID / 密码；「立即重拨」→ 换 IP → 立即跑 CF DDNS + sync_addrs
+- **定时：** `pppoeScheduleEnable` + 任意 N 天（`pppoeScheduleDays`）+ 固定时刻 `HH:MM`
+  - 满 N 天未成功换 IP → 到点自动重拨；周期内已换过 → 跳过自动
+  - 手动可随时重拨；成功后 **5 分钟**冷却
+- systemd：`suiplus-pppoe.timer`（约 15 分钟检查一次，脚本门控时刻与周期）
 - **不**重建 Argo / 优选 SNI
 
 ## 6. 持久化

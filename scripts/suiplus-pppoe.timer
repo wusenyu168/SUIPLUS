@@ -1,0 +1,12 @@
+[Unit]
+Description=SUIPLUS PPPoE schedule checker (hourly; script enforces HH:MM + N days)
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=15min
+AccuracySec=1min
+Persistent=true
+Unit=suiplus-pppoe.service
+
+[Install]
+WantedBy=timers.target

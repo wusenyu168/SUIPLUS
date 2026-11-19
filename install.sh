@@ -73,6 +73,7 @@ install_suiplus_helpers() {
         suiplus_sync_prefer.py
         suiplus_after_settings.py
         suiplus_apply_ddns_timer.py
+        suiplus_apply_pppoe_timer.py
         suiplus_pppoe_redial.py
         suiplus_argo.sh
         suiplus_issue_cert.sh
@@ -81,6 +82,8 @@ install_suiplus_helpers() {
         suiplus-cf-ddns.timer
         suiplus-prefer.service
         suiplus-prefer.timer
+        suiplus-pppoe.service
+        suiplus-pppoe.timer
     )
     local f
     for f in "${helpers[@]}"; do
@@ -112,6 +115,12 @@ install_suiplus_helpers() {
     if [[ -f /usr/local/s-ui/scripts/suiplus-prefer.timer ]]; then
         cp -f /usr/local/s-ui/scripts/suiplus-prefer.timer /etc/systemd/system/suiplus-prefer.timer
     fi
+    if [[ -f /usr/local/s-ui/scripts/suiplus-pppoe.service ]]; then
+        cp -f /usr/local/s-ui/scripts/suiplus-pppoe.service /etc/systemd/system/suiplus-pppoe.service
+    fi
+    if [[ -f /usr/local/s-ui/scripts/suiplus-pppoe.timer ]]; then
+        cp -f /usr/local/s-ui/scripts/suiplus-pppoe.timer /etc/systemd/system/suiplus-pppoe.timer
+    fi
     systemctl daemon-reload 2>/dev/null || true
     if [[ -f /etc/systemd/system/suiplus-prefer.service ]]; then
         systemctl enable suiplus-prefer.service 2>/dev/null || true
@@ -124,6 +133,11 @@ install_suiplus_helpers() {
         python3 /usr/local/s-ui/scripts/suiplus_apply_ddns_timer.py 2>/dev/null || true
     elif [[ -f /etc/systemd/system/suiplus-cf-ddns.timer ]]; then
         systemctl enable --now suiplus-cf-ddns.timer 2>/dev/null || true
+    fi
+    if [[ -f /usr/local/s-ui/scripts/suiplus_apply_pppoe_timer.py ]]; then
+        python3 /usr/local/s-ui/scripts/suiplus_apply_pppoe_timer.py 2>/dev/null || true
+    elif [[ -f /etc/systemd/system/suiplus-pppoe.timer ]]; then
+        systemctl enable --now suiplus-pppoe.timer 2>/dev/null || true
     fi
 }
 
@@ -269,7 +283,7 @@ install_suiplus() {
     url="${info#*|}"
 
     echo -e "${yellow}一键安装/更新下载的是 GitHub Release 二进制（${ver}），不是 git clone 源码目录。${plain}"
-    echo -e "${yellow}请确保已发布与 config/version 一致的 Release（当前源码为 1.6.9 → 标签 v1.6.9），否则会装到旧包。${plain}"
+    echo -e "${yellow}请确保已发布与 config/version 一致的 Release（当前源码为 1.6.10 → 标签 v1.6.10），否则会装到旧包。${plain}"
     echo -e "下载：${url}"
     if ! wget -N --no-check-certificate -O "/tmp/s-ui-linux-${arch_name}.tar.gz" "${url}"; then
         echo -e "${red}下载失败${plain}"

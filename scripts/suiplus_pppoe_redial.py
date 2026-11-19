@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Dynamic IP redial (provider API) then refresh CF DDNS.
 
-Provider-domain / account / password come from s-ui settings.
-NOT the panel webDomain — pppoeProviderDomain is VPS vendor domain only.
-Does NOT restart Argo / prefer tunnel.
+Manual: anytime, but 5 minutes cooldown after a successful IP change.
+Auto (--auto): N-day cycle + fixed HH:MM; skip if last success within N days.
+Provider domain is VPS vendor domain (not panel webDomain). Does NOT touch Argo.
 """
 from __future__ import annotations
 
+import argparse
 import base64
 import json
 import os
@@ -25,6 +26,7 @@ DB = os.environ.get("SUI_DB", "/usr/local/s-ui/db/s-ui.db")
 LOG = Path("/var/log/suiplus-pppoe.log")
 IP_WAIT_SEC = int(os.environ.get("PPPOE_IP_WAIT_SEC", "150"))
 IP_POLL_SEC = int(os.environ.get("PPPOE_IP_POLL_SEC", "5"))
+COOLDOWN_SEC = 300
 TIMEOUT = 30
 POLL_TIMEOUT = 8
 
@@ -134,27 +136,97 @@ def run_ddns() -> None:
         subprocess.call([sys.executable, str(addrs)], timeout=180)
 
 
-def main() -> int:
-    if not Path(DB).is_file():
-        log("error: no db")
-        print(json.dumps({"ok": False, "msg": "no db"}, ensure_ascii=False))
-        return 1
-    s = settings(DB)
+def last_success_ts(s: dict[str, str]) -> int:
+    raw = (s.get("pppoeLastSuccessTs") or "").strip()
+    if raw:
+        try:
+            return int(float(raw))
+        except ValueError:
+            pass
+    # fallback: parse pppoeLastAt
+    at = (s.get("pppoeLastAt") or "").strip()
+    if at:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                return int(datetime.strptime(at, fmt).timestamp())
+            except ValueError:
+                continue
+    return 0
+
+
+def parse_hhmm(raw: str) -> tuple[int, int] | None:
+    text = (raw or "03:00").strip()
+    parts = text.split(":")
+    if len(parts) != 2:
+        return None
+    try:
+        h, m = int(parts[0]), int(parts[1])
+    except ValueError:
+        return None
+    if not (0 <= h <= 23 and 0 <= m <= 59):
+        return None
+    return h, m
+
+
+def schedule_days(s: dict[str, str]) -> int:
+    try:
+        n = int(float(str(s.get("pppoeScheduleDays") or "1").strip()))
+    except ValueError:
+        n = 1
+    return max(1, min(n, 365))
+
+
+def fail(msg: str, *, code: int = 1, **extra: Any) -> int:
+    log(f"skip/fail: {msg}")
+    payload = {"ok": False, "msg": msg, **extra}
+    print(json.dumps(payload, ensure_ascii=False))
+    return code
+
+
+def maybe_skip_auto(s: dict[str, str]) -> str | None:
+    """Return skip reason or None to proceed."""
     if s.get("pppoeEnable", "false").lower() not in ("true", "1", "yes"):
-        msg = "动态拨号未启用"
-        log(f"skip: {msg}")
-        print(json.dumps({"ok": False, "msg": msg}, ensure_ascii=False))
-        return 1
+        return "动态拨号未启用"
+    if s.get("pppoeScheduleEnable", "false").lower() not in ("true", "1", "yes"):
+        return "定时自动重拨未启用"
+    hhmm = parse_hhmm(s.get("pppoeScheduleTime") or "03:00")
+    if not hhmm:
+        return "定时时刻格式无效（需要 HH:MM）"
+    now = datetime.now()
+    if (now.hour, now.minute) < hhmm:
+        return f"未到今日时刻 {hhmm[0]:02d}:{hhmm[1]:02d}"
+    today = now.strftime("%Y-%m-%d")
+    if (s.get("pppoeLastAutoFireDate") or "").strip() == today:
+        return "今日定时已执行过"
+    last = last_success_ts(s)
+    need = schedule_days(s) * 86400
+    if last and (time.time() - last) < need:
+        days = schedule_days(s)
+        left = int(need - (time.time() - last))
+        return f"周期内已换过 IP（设定 {days} 天，约剩余 {max(0, left)//3600} 小时）"
+    return None
+
+
+def cooldown_block(s: dict[str, str]) -> str | None:
+    last = last_success_ts(s)
+    if last and (time.time() - last) < COOLDOWN_SEC:
+        left = int(COOLDOWN_SEC - (time.time() - last))
+        return f"成功换 IP 后 5 分钟内不可重拨（剩余约 {left} 秒）"
+    return None
+
+
+def do_redial(s: dict[str, str], *, auto: bool) -> int:
     aid = (s.get("pppoeAccountId") or "").strip()
     pw = (s.get("pppoePassword") or "").strip()
     vendor = (s.get("pppoeProviderDomain") or "").strip()
     if not aid or not pw:
-        msg = "请先填写账号 ID 和密码并保存"
-        log(f"error: {msg}")
-        print(json.dumps({"ok": False, "msg": msg}, ensure_ascii=False))
-        return 1
+        return fail("请先填写账号 ID 和密码并保存")
 
-    log(f"redial start vendor={vendor or '-'} id={aid[:3]}***")
+    cool = cooldown_block(s)
+    if cool:
+        return fail(cool)
+
+    log(f"redial start auto={auto} vendor={vendor or '-'} id={aid[:3]}***")
     pre = show_ip(aid, pw, timeout=POLL_TIMEOUT)
     old_ip = ""
     if pre.get("status") == "success":
@@ -165,9 +237,7 @@ def main() -> int:
     result = change_ip(aid, pw)
     if result.get("status") != "success":
         msg = _sanitize_msg(str(result.get("msg") or "重拨失败"))
-        log(f"changeip fail: {msg}")
-        print(json.dumps({"ok": False, "msg": msg, "prev_ip": old_ip}, ensure_ascii=False))
-        return 1
+        return fail(msg, prev_ip=old_ip)
 
     new_ip = ""
     deadline = time.time() + IP_WAIT_SEC
@@ -185,28 +255,25 @@ def main() -> int:
         break
 
     if not new_ip:
-        # accept changeip-reported ip if any
         new_ip = str(result.get("ip") or "").strip()
     if not new_ip:
-        msg = "重拨已提交但未检测到新 IP，请稍后点「立即重拨」或手动刷新 DDNS"
-        log(f"warn: {msg} old={old_ip}")
-        print(
-            json.dumps(
-                {"ok": False, "msg": msg, "prev_ip": old_ip, "last_ip": old_ip},
-                ensure_ascii=False,
-            )
+        return fail(
+            "重拨已提交但未检测到新 IP，请稍后点「立即重拨」或手动刷新 DDNS",
+            prev_ip=old_ip,
+            last_ip=old_ip,
         )
-        return 1
 
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    upsert_settings(
-        DB,
-        {
-            "pppoePrevIp": old_ip,
-            "pppoeLastIp": new_ip,
-            "pppoeLastAt": now,
-        },
-    )
+    now_ts = int(time.time())
+    now = datetime.fromtimestamp(now_ts).strftime("%Y-%m-%d %H:%M:%S")
+    kv = {
+        "pppoePrevIp": old_ip,
+        "pppoeLastIp": new_ip,
+        "pppoeLastAt": now,
+        "pppoeLastSuccessTs": str(now_ts),
+    }
+    if auto:
+        kv["pppoeLastAutoFireDate"] = datetime.now().strftime("%Y-%m-%d")
+    upsert_settings(DB, kv)
     log(f"ip changed {old_ip or '-'} -> {new_ip}; refreshing DDNS")
     try:
         run_ddns()
@@ -222,9 +289,37 @@ def main() -> int:
         "pppoePrevIp": old_ip,
         "pppoeLastIp": new_ip,
         "pppoeLastAt": now,
+        "pppoeLastSuccessTs": str(now_ts),
     }
     print(json.dumps(out, ensure_ascii=False))
     return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="SUIPLUS PPPoE redial")
+    parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="Scheduled run: honor N-day cycle + HH:MM; skip quietly when not due",
+    )
+    args = parser.parse_args()
+
+    if not Path(DB).is_file():
+        return fail("no db")
+
+    s = settings(DB)
+    if args.auto:
+        reason = maybe_skip_auto(s)
+        if reason:
+            # exit 0 so timer does not look failed
+            log(f"auto skip: {reason}")
+            print(json.dumps({"ok": True, "skipped": True, "msg": reason}, ensure_ascii=False))
+            return 0
+        return do_redial(s, auto=True)
+
+    if s.get("pppoeEnable", "false").lower() not in ("true", "1", "yes"):
+        return fail("动态拨号未启用")
+    return do_redial(s, auto=False)
 
 
 if __name__ == "__main__":

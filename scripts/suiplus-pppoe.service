@@ -1,0 +1,13 @@
+[Unit]
+Description=SUIPLUS PPPoE scheduled redial check (oneshot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+KillMode=process
+ExecStart=/usr/bin/python3 /usr/local/s-ui/scripts/suiplus_pppoe_redial.py --auto
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

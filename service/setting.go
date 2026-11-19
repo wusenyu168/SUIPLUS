@@ -77,13 +77,18 @@ var defaultValueMap = map[string]string{
 	// Prefer / Argo — synced separately from DDNS timer
 	"suiplusPreferEnable": "false",
 	// Dynamic redial (VPS provider account — not panel webDomain)
-	"pppoeEnable":         "false",
-	"pppoeProviderDomain": "",
-	"pppoeAccountId":      "",
-	"pppoePassword":       "",
-	"pppoeLastIp":         "",
-	"pppoePrevIp":         "",
-	"pppoeLastAt":         "",
+	"pppoeEnable":            "false",
+	"pppoeProviderDomain":    "",
+	"pppoeAccountId":         "",
+	"pppoePassword":          "",
+	"pppoeScheduleEnable":    "false",
+	"pppoeScheduleDays":      "1",
+	"pppoeScheduleTime":      "03:00",
+	"pppoeLastIp":            "",
+	"pppoePrevIp":            "",
+	"pppoeLastAt":            "",
+	"pppoeLastSuccessTs":     "",
+	"pppoeLastAutoFireDate":  "",
 }
 
 type SettingService struct {

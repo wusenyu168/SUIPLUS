@@ -3,8 +3,9 @@
 
 Order:
   1) apply DDNS timer interval from cfDdnsInterval
-  2) sync TUD addrs (domain/IP) — never starts/kills Argo
-  3) sync prefer/Argo only when suiplusPreferEnable is on
+  2) apply PPPoE schedule timer (N days + HH:MM)
+  3) sync TUD addrs (domain/IP) — never starts/kills Argo
+  4) sync prefer/Argo only when suiplusPreferEnable is on
 """
 from __future__ import annotations
 
@@ -31,6 +32,7 @@ def main() -> int:
     rc = 0
     for script in (
         "suiplus_apply_ddns_timer.py",
+        "suiplus_apply_pppoe_timer.py",
         "suiplus_sync_addrs.py",
         "suiplus_sync_prefer.py",
     ):

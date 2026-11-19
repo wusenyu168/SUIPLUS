@@ -169,6 +169,7 @@ jobs:
             suiplus_sync_prefer.py \
             suiplus_after_settings.py \
             suiplus_apply_ddns_timer.py \
+            suiplus_apply_pppoe_timer.py \
             suiplus_pppoe_redial.py \
             suiplus_argo.sh \
             suiplus_issue_cert.sh \
@@ -177,7 +178,9 @@ jobs:
             suiplus-cf-ddns.service \
             suiplus-cf-ddns.timer \
             suiplus-prefer.service \
-            suiplus-prefer.timer
+            suiplus-prefer.timer \
+            suiplus-pppoe.service \
+            suiplus-pppoe.timer
           do
             if [ -f "scripts/$f" ]; then
               cp "scripts/$f" s-ui/scripts/

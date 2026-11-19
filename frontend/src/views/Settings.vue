@@ -128,7 +128,7 @@
         <v-row>
           <v-col cols="12">
             <v-alert type="info" variant="tonal" density="compact" class="mb-2">
-              动态拨号：关联域名填 VPS 服务商域名（不是本面板域名）。重拨成功后会立即刷新 CF DDNS，不重建优选 SNI。
+              动态拨号：关联域名填 VPS 服务商域名（不是本面板域名）。满 N 天未换 IP 则在设定时刻自动重拨；手动可随时重拨，成功后 5 分钟冷却。成功后刷新 CF DDNS，不重建优选 SNI。
             </v-alert>
           </v-col>
           <v-col cols="12" sm="6" md="4">
@@ -149,6 +149,28 @@
             <v-text-field v-model="settings.pppoePassword" label="密码" hide-details type="password"></v-text-field>
           </v-col>
           <v-col cols="12" sm="6" md="4">
+            <v-switch color="primary" v-model="pppoeScheduleEnable" label="定时自动重拨" hide-details />
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-text-field
+              v-model="settings.pppoeScheduleDays"
+              label="周期（天，任意 N）"
+              type="number"
+              min="1"
+              hint="满 N 天未换 IP 才自动重拨"
+              persistent-hint
+            ></v-text-field>
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-text-field
+              v-model="settings.pppoeScheduleTime"
+              label="时刻 HH:MM"
+              placeholder="03:00"
+              hint="固定时刻，如 03:00"
+              persistent-hint
+            ></v-text-field>
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
             <v-btn color="warning" variant="tonal" @click="pppoeRedial" :loading="pppoeLoading" :disabled="pppoeLoading">
               立即重拨
             </v-btn>
@@ -162,7 +184,7 @@
         </v-row>
 
         <v-alert class="mt-4" type="info" variant="tonal" density="compact">
-          记录名只填主机名（如 node），Zone 填主域。节点域名固定灰云。证书成功后「复制面板链接」才会可点。动态拨号请先保存再点重拨。
+          记录名只填主机名（如 node），Zone 填主域。节点域名固定灰云。动态拨号请先保存；手动成功后 5 分钟内不可再拨。
         </v-alert>
       </v-window-item>
 
@@ -278,9 +300,14 @@ const settings = ref({
   pppoeProviderDomain: "",
   pppoeAccountId: "",
   pppoePassword: "",
+  pppoeScheduleEnable: "false",
+  pppoeScheduleDays: "1",
+  pppoeScheduleTime: "03:00",
   pppoeLastIp: "",
   pppoePrevIp: "",
   pppoeLastAt: "",
+  pppoeLastSuccessTs: "",
+  pppoeLastAutoFireDate: "",
 })
 const certLoading = ref(false)
 const pppoeLoading = ref(false)
@@ -404,6 +431,11 @@ const suiplusPreferEnable = computed({
 const pppoeEnable = computed({
   get: () => { return settings.value.pppoeEnable == "true" },
   set: (v:boolean) => { settings.value.pppoeEnable = v ? "true" : "false" }
+})
+
+const pppoeScheduleEnable = computed({
+  get: () => { return settings.value.pppoeScheduleEnable == "true" },
+  set: (v:boolean) => { settings.value.pppoeScheduleEnable = v ? "true" : "false" }
 })
 
 const copyPanelLink = async () => {

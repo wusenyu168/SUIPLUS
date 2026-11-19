@@ -521,9 +521,14 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
         "pppoeProviderDomain": "",
         "pppoeAccountId": "",
         "pppoePassword": "",
+        "pppoeScheduleEnable": "false",
+        "pppoeScheduleDays": "1",
+        "pppoeScheduleTime": "03:00",
         "pppoeLastIp": "",
         "pppoePrevIp": "",
         "pppoeLastAt": "",
+        "pppoeLastSuccessTs": "",
+        "pppoeLastAutoFireDate": "",
     }.items():
         upsert_setting(cur, k, v)
 
