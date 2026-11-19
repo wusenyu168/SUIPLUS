@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Dynamic IP redial (provider API) then refresh CF DDNS.
 
-Manual: anytime, but 5 minutes cooldown after a successful IP change.
-Auto (--auto): N-day cycle + fixed HH:MM in panel timeLocation; skip if last
-success within N days. When pppoePending, always try showip first.
-Provider domain is VPS vendor domain (not panel webDomain). Does NOT touch Argo.
+Manual: 5 minutes cooldown ONLY after successful redial (changeip).
+Session 72h: anchored at first confirm of current IP; same-IP showip does not reset.
+LastAt: always updated on successful showip / confirm (panel timeLocation).
+Auto (--auto): N-day cycle (0 = no day gate) + HH:MM in panel timeLocation.
+When pppoePending, always try showip first. Does NOT touch Argo.
 """
 from __future__ import annotations
 
@@ -73,8 +74,7 @@ def upsert_settings(db: str, kv: dict[str, str]) -> None:
 
 
 def panel_tz_name(s: dict[str, str]) -> str:
-    name = (s.get("timeLocation") or "").strip() or DEFAULT_TZ
-    return name
+    return (s.get("timeLocation") or "").strip() or DEFAULT_TZ
 
 
 def panel_tz(s: dict[str, str]):
@@ -173,26 +173,36 @@ def run_ddns() -> None:
         subprocess.call([sys.executable, str(addrs)], timeout=180)
 
 
-def last_success_ts(s: dict[str, str]) -> int:
-    raw = (s.get("pppoeLastSuccessTs") or "").strip()
-    if raw:
-        try:
-            return int(float(raw))
-        except ValueError:
-            pass
-    # fallback: parse pppoeLastAt as panel timezone wall clock
-    at = (s.get("pppoeLastAt") or "").strip()
-    if at:
-        tz = panel_tz(s)
-        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
-            try:
-                dt = datetime.strptime(at, fmt)
-                if tz is not None:
-                    dt = dt.replace(tzinfo=tz)
-                return int(dt.timestamp())
-            except ValueError:
-                continue
-    return 0
+def _parse_ts(raw: str) -> int:
+    text = (raw or "").strip()
+    if not text:
+        return 0
+    try:
+        return int(float(text))
+    except ValueError:
+        return 0
+
+
+def session_start_ts(s: dict[str, str]) -> int:
+    """72h anchor: first confirm of current IP."""
+    ts = _parse_ts(s.get("pppoeSessionStartTs") or "")
+    if ts:
+        return ts
+    # migrate: older builds used pppoeLastSuccessTs for both
+    return _parse_ts(s.get("pppoeLastSuccessTs") or "")
+
+
+def cooldown_until_ts(s: dict[str, str]) -> int:
+    """Button gray until this unix ts (only set after successful redial)."""
+    return _parse_ts(s.get("pppoeCooldownUntilTs") or "")
+
+
+def last_change_ts(s: dict[str, str]) -> int:
+    """For N-day schedule gate: last successful IP change / redial."""
+    ts = _parse_ts(s.get("pppoeLastSuccessTs") or "")
+    if ts:
+        return ts
+    return session_start_ts(s)
 
 
 def parse_hhmm(raw: str) -> tuple[int, int] | None:
@@ -210,11 +220,12 @@ def parse_hhmm(raw: str) -> tuple[int, int] | None:
 
 
 def schedule_days(s: dict[str, str]) -> int:
+    """0 = no day gate (test-friendly); max 365."""
     try:
         n = int(float(str(s.get("pppoeScheduleDays") or "1").strip()))
     except ValueError:
         n = 1
-    return max(1, min(n, 365))
+    return max(0, min(n, 365))
 
 
 def fail(msg: str, *, code: int = 1, **extra: Any) -> int:
@@ -228,11 +239,12 @@ def maybe_skip_auto(s: dict[str, str]) -> str | None:
     """Return skip reason or None to proceed. Times use panel timeLocation."""
     now = now_panel(s)
     tz_name = panel_tz_name(s)
+    days = schedule_days(s)
     # #region agent log
     try:
         _dbg = {
             "sessionId": "28da0c",
-            "runId": "tz-cooldown",
+            "runId": "post-fix",
             "hypothesisId": "H1",
             "location": "suiplus_pppoe_redial.py:maybe_skip_auto",
             "message": "auto gate tz snapshot",
@@ -241,15 +253,16 @@ def maybe_skip_auto(s: dict[str, str]) -> str | None:
                 "timeLocation": tz_name,
                 "panel_now": now.isoformat(sep=" ", timespec="seconds"),
                 "local_now": datetime.now().isoformat(sep=" ", timespec="seconds"),
-                "utc_now": datetime.utcnow().isoformat(sep=" ", timespec="seconds"),
                 "scheduleTime": (s.get("pppoeScheduleTime") or ""),
                 "scheduleEnable": (s.get("pppoeScheduleEnable") or ""),
                 "pppoeEnable": (s.get("pppoeEnable") or ""),
                 "lastAutoFire": (s.get("pppoeLastAutoFireDate") or ""),
+                "sessionStartTs": (s.get("pppoeSessionStartTs") or ""),
+                "cooldownUntilTs": (s.get("pppoeCooldownUntilTs") or ""),
                 "lastSuccessTs": (s.get("pppoeLastSuccessTs") or ""),
                 "lastAt": (s.get("pppoeLastAt") or ""),
                 "pending": (s.get("pppoePending") or ""),
-                "scheduleDays": (s.get("pppoeScheduleDays") or ""),
+                "scheduleDays": days,
             },
             "timestamp": int(time.time() * 1000),
         }
@@ -272,25 +285,27 @@ def maybe_skip_auto(s: dict[str, str]) -> str | None:
     today = now.strftime("%Y-%m-%d")
     if (s.get("pppoeLastAutoFireDate") or "").strip() == today:
         return "今日定时已执行过"
-    last = last_success_ts(s)
-    need = schedule_days(s) * 86400
-    if last and (time.time() - last) < need:
-        days = schedule_days(s)
-        left = int(need - (time.time() - last))
-        return f"周期内已换过 IP（设定 {days} 天，约剩余 {max(0, left)//3600} 小时）"
+    # 0 days: skip N-day gate
+    if days > 0:
+        last = last_change_ts(s)
+        need = days * 86400
+        if last and (time.time() - last) < need:
+            left = int(need - (time.time() - last))
+            return f"周期内已换过 IP（设定 {days} 天，约剩余 {max(0, left)//3600} 小时）"
     return None
 
 
 def cooldown_block(s: dict[str, str]) -> str | None:
-    last = last_success_ts(s)
-    if last and (time.time() - last) < COOLDOWN_SEC:
-        left = int(COOLDOWN_SEC - (time.time() - last))
-        return f"成功换 IP 后 5 分钟内不可重拨（剩余约 {left} 秒）"
+    until = cooldown_until_ts(s)
+    now = int(time.time())
+    if until and now < until:
+        left = until - now
+        return f"成功重拨后 5 分钟内不可再拨（剩余约 {left} 秒）"
     return None
 
 
 def do_showip(s: dict[str, str]) -> int:
-    """Fetch current provider IP; update last/prev when changed."""
+    """Fetch IP. Always refresh LastAt; same IP keeps SessionStartTs."""
     aid = (s.get("pppoeAccountId") or "").strip()
     pw = (s.get("pppoePassword") or "").strip()
     if not aid or not pw:
@@ -301,10 +316,17 @@ def do_showip(s: dict[str, str]) -> int:
     prev = (s.get("pppoePrevIp") or "").strip()
     last = (s.get("pppoeLastIp") or "").strip()
     pending = (s.get("pppoePending") or "").lower() in ("true", "1", "yes")
+    sess = session_start_ts(s)
     check = show_ip(aid, pw, timeout=TIMEOUT)
     if check.get("status") != "success":
         msg = _sanitize_msg(str(check.get("msg") or "获取 IP 失败"))
-        return fail(msg, pppoePrevIp=prev, pppoeLastIp=last, transient=bool(check.get("transient")), pppoePending=str(pending).lower())
+        return fail(
+            msg,
+            pppoePrevIp=prev,
+            pppoeLastIp=last,
+            transient=bool(check.get("transient")),
+            pppoePending=str(pending).lower(),
+        )
 
     cur = str(check.get("ip") or "").strip()
     if not cur:
@@ -312,41 +334,57 @@ def do_showip(s: dict[str, str]) -> int:
 
     now_ts = int(time.time())
     now = format_panel_now(s)
+    # Always record last fetch time
     kv: dict[str, str] = {"pppoeLastAt": now, "pppoePending": "false"}
     changed = bool(last and cur != last)
+    new_session = False
+
     if changed:
         kv["pppoePrevIp"] = last
         kv["pppoeLastIp"] = cur
-        # Keep existing session ts if already running; else start now
-        if not last_success_ts(s):
-            kv["pppoeLastSuccessTs"] = str(now_ts)
+        kv["pppoeSessionStartTs"] = str(now_ts)
+        kv["pppoeLastSuccessTs"] = str(now_ts)
+        sess = now_ts
+        new_session = True
         prev, last = last, cur
-        log(f"showip changed {prev} -> {last}; refreshing DDNS")
+        log(f"showip changed {prev} -> {last}; new session; refreshing DDNS")
         upsert_settings(DB, kv)
         try:
             run_ddns()
         except Exception as e:
             log(f"ddns after showip: {e}")
         msg = f"IP 已更新 {prev} → {last}"
-    else:
-        if not last:
-            kv["pppoeLastIp"] = cur
-            last = cur
-            if not last_success_ts(s):
-                kv["pppoeLastSuccessTs"] = str(now_ts)
+    elif not last:
+        # First confirm of this IP → start 72h session
+        kv["pppoeLastIp"] = cur
+        kv["pppoeSessionStartTs"] = str(now_ts)
+        kv["pppoeLastSuccessTs"] = str(now_ts)
+        last = cur
+        sess = now_ts
+        new_session = True
         upsert_settings(DB, kv)
-        msg = f"当前 IP {cur}" + ("（未变化）" if last == cur and (prev or not pending) else "")
-        if pending:
-            msg = f"已确认 IP {cur}"
+        msg = f"已确认 IP {cur}" if pending else f"当前 IP {cur}"
+    else:
+        # Same IP: only LastAt; keep SessionStartTs (do not stack)
+        if not sess:
+            kv["pppoeSessionStartTs"] = str(now_ts)
+            kv["pppoeLastSuccessTs"] = str(now_ts)
+            sess = now_ts
+            new_session = True
+        upsert_settings(DB, kv)
+        msg = f"已确认 IP {cur}" if pending else f"当前 IP {cur}（未变化）"
 
     out = {
         "ok": True,
         "msg": msg,
         "changed": changed,
+        "new_session": new_session,
         "pppoePrevIp": prev or (s.get("pppoePrevIp") or ""),
         "pppoeLastIp": last or cur,
         "pppoeLastAt": now,
-        "pppoeLastSuccessTs": kv.get("pppoeLastSuccessTs") or (s.get("pppoeLastSuccessTs") or ""),
+        "pppoeSessionStartTs": str(sess),
+        "pppoeLastSuccessTs": kv.get("pppoeLastSuccessTs") or (s.get("pppoeLastSuccessTs") or str(sess)),
+        "pppoeCooldownUntilTs": (s.get("pppoeCooldownUntilTs") or ""),
         "pppoePending": "false",
     }
     print(json.dumps(out, ensure_ascii=False))
@@ -372,12 +410,13 @@ def do_redial(s: dict[str, str], *, auto: bool) -> int:
     else:
         old_ip = (s.get("pppoeLastIp") or "").strip()
 
-    # Lock previous IP before changeip (survive panel disconnect); start session even without prev IP
     now_ts = int(time.time())
     now = format_panel_now(s)
+    # Pending + session start even without prev IP; cooldown only after changeip success
     pre_kv: dict[str, str] = {
         "pppoePending": "true",
         "pppoeLastAt": now,
+        "pppoeSessionStartTs": str(now_ts),
         "pppoeLastSuccessTs": str(now_ts),
     }
     if old_ip:
@@ -389,8 +428,17 @@ def do_redial(s: dict[str, str], *, auto: bool) -> int:
     result = change_ip(aid, pw)
     if result.get("status") != "success":
         msg = _sanitize_msg(str(result.get("msg") or "重拨失败"))
-        return fail(msg, pppoePrevIp=old_ip, pppoeLastIp=(s.get("pppoeLastIp") or old_ip), pppoePending="true")
+        # Failed redial: do not arm 5-min button cooldown
+        return fail(
+            msg,
+            pppoePrevIp=old_ip,
+            pppoeLastIp=(s.get("pppoeLastIp") or old_ip),
+            pppoePending="true",
+            pppoeSessionStartTs=str(now_ts),
+        )
 
+    # changeip accepted → arm 5-min button cooldown
+    cool_until = str(now_ts + COOLDOWN_SEC)
     new_ip = ""
     deadline = time.time() + IP_WAIT_SEC
     while time.time() < deadline:
@@ -409,13 +457,16 @@ def do_redial(s: dict[str, str], *, auto: bool) -> int:
     if not new_ip:
         new_ip = str(result.get("ip") or "").strip()
     if not new_ip:
+        at = format_panel_now(s)
         upsert_settings(
             DB,
             {
                 "pppoePrevIp": old_ip,
                 "pppoePending": "true",
-                "pppoeLastAt": format_panel_now(s),
+                "pppoeLastAt": at,
+                "pppoeSessionStartTs": str(now_ts),
                 "pppoeLastSuccessTs": str(now_ts),
+                "pppoeCooldownUntilTs": cool_until,
             },
         )
         return fail(
@@ -423,8 +474,10 @@ def do_redial(s: dict[str, str], *, auto: bool) -> int:
             pppoePrevIp=old_ip,
             pppoeLastIp=(s.get("pppoeLastIp") or old_ip),
             pppoePending="true",
+            pppoeSessionStartTs=str(now_ts),
             pppoeLastSuccessTs=str(now_ts),
-            pppoeLastAt=format_panel_now(s),
+            pppoeCooldownUntilTs=cool_until,
+            pppoeLastAt=at,
         )
 
     now2 = format_panel_now(s)
@@ -432,7 +485,9 @@ def do_redial(s: dict[str, str], *, auto: bool) -> int:
         "pppoePrevIp": old_ip,
         "pppoeLastIp": new_ip,
         "pppoeLastAt": now2,
+        "pppoeSessionStartTs": str(now_ts),
         "pppoeLastSuccessTs": str(now_ts),
+        "pppoeCooldownUntilTs": cool_until,
         "pppoePending": "false",
     }
     if auto:
@@ -453,7 +508,9 @@ def do_redial(s: dict[str, str], *, auto: bool) -> int:
         "pppoePrevIp": old_ip,
         "pppoeLastIp": new_ip,
         "pppoeLastAt": now2,
+        "pppoeSessionStartTs": str(now_ts),
         "pppoeLastSuccessTs": str(now_ts),
+        "pppoeCooldownUntilTs": cool_until,
         "pppoePending": "false",
     }
     print(json.dumps(out, ensure_ascii=False))
@@ -481,14 +538,12 @@ def main() -> int:
     if args.showip:
         return do_showip(s)
     if args.auto:
-        # Pending after redial disconnect: always try fetch IP (ignore schedule gate)
         if (s.get("pppoePending") or "").lower() in ("true", "1", "yes"):
             log(f"auto pending showip tz={panel_tz_name(s)}")
             do_showip(s)
             s = settings(DB)
         reason = maybe_skip_auto(s)
         if reason:
-            # exit 0 so timer does not look failed
             log(f"auto skip: {reason}")
             print(json.dumps({"ok": True, "skipped": True, "msg": reason}, ensure_ascii=False))
             return 0

@@ -528,6 +528,8 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
         "pppoePrevIp": "",
         "pppoeLastAt": "",
         "pppoeLastSuccessTs": "",
+        "pppoeSessionStartTs": "",
+        "pppoeCooldownUntilTs": "",
         "pppoeLastAutoFireDate": "",
         "pppoePending": "false",
         "argoAutoRebuild": "false",

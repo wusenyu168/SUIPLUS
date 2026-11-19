@@ -93,6 +93,8 @@ var defaultValueMap = map[string]string{
 	"pppoePrevIp":            "",
 	"pppoeLastAt":            "",
 	"pppoeLastSuccessTs":     "",
+	"pppoeSessionStartTs":    "",
+	"pppoeCooldownUntilTs":   "",
 	"pppoeLastAutoFireDate":  "",
 	"pppoePending":           "false",
 }

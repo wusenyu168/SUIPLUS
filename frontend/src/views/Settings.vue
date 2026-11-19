@@ -149,7 +149,7 @@
             </v-card-title>
             <v-card-text>
               <v-alert type="info" variant="tonal" density="compact" class="mb-3">
-                换线时短暂断网正常；恢复后自动或点「获取 IP」。定时时刻按面板「时区」计算。会话 72 小时；手动重拨另有 5 分钟冷却。重拨只刷 DDNS，不重建 Argo。
+                换线断网正常；恢复后自动或点「获取 IP」。同 IP 重复获取不重开 72h。仅重拨成功后按钮灰 5 分钟。周期可填 0 天测定时。重拨只刷 DDNS，不重建 Argo。
               </v-alert>
               <v-row class="mb-1">
                 <v-col cols="12" sm="6" md="4">
@@ -177,15 +177,17 @@
                 <v-row align="end">
                   <v-col cols="12" md="4">
                     <v-switch color="primary" v-model="pppoeScheduleEnable" label="定时自动重拨" hide-details />
-                    <div class="text-caption text-medium-emphasis mt-1">满 N 天未换 IP 才自动跑（时刻用面板时区）</div>
+                    <div class="text-caption text-medium-emphasis mt-1">满 N 天未换 IP 才自动跑；0=不卡天数（测定时）</div>
                   </v-col>
                   <v-col cols="12" sm="4" md="3">
                     <v-text-field
                       v-model="settings.pppoeScheduleDays"
                       label="周期（天）"
                       type="number"
-                      min="1"
+                      min="0"
                       hide-details
+                      hint="0=仅按时刻"
+                      persistent-hint
                     ></v-text-field>
                   </v-col>
                   <v-col cols="12" sm="8" md="5">
@@ -213,11 +215,14 @@
                     <div class="text-caption text-medium-emphasis">冷却 / 状态</div>
                     <div class="text-body-2" :class="(sessionLeft > 0 || cooldownLeft > 0) ? 'text-warning' : 'text-medium-emphasis'">
                       <template v-if="sessionLeft > 0">会话剩余 {{ sessionText }}</template>
-                      <template v-else-if="cooldownLeft > 0">可再拨 {{ cooldownText }}</template>
                       <template v-else-if="settings.pppoePending === 'true'">待确认 · 自动/手动获取 IP</template>
-                      <template v-else-if="settings.pppoeLastAt">时间 {{ settings.pppoeLastAt }}</template>
-                      <template v-else>可立即重拨</template>
-                      <div v-if="sessionLeft > 0 && cooldownLeft > 0" class="text-caption text-medium-emphasis mt-1">可再拨 {{ cooldownText }}</div>
+                      <template v-else-if="!settings.pppoeLastAt">可立即重拨</template>
+                      <div v-if="cooldownLeft > 0" class="text-caption mt-1" :class="sessionLeft > 0 ? 'text-medium-emphasis' : 'text-warning'">
+                        可再拨 {{ cooldownText }}
+                      </div>
+                      <div v-if="settings.pppoeLastAt" class="text-caption text-medium-emphasis mt-1">
+                        上次获取 {{ settings.pppoeLastAt }}
+                      </div>
                     </div>
                   </v-col>
                 </v-row>
@@ -363,6 +368,8 @@ const settings = ref({
   pppoePrevIp: "",
   pppoeLastAt: "",
   pppoeLastSuccessTs: "",
+  pppoeSessionStartTs: "",
+  pppoeCooldownUntilTs: "",
   pppoeLastAutoFireDate: "",
   pppoePending: "false",
 })
@@ -372,12 +379,11 @@ const pppoeShowLoading = ref(false)
 const argoLoading = ref(false)
 const nowTick = ref(Date.now())
 let cooldownTimer: ReturnType<typeof setInterval> | null = null
-const COOLDOWN_SEC = 300
 const SESSION_SEC = 72 * 3600
 
 const applyPppoeFields = (obj: Record<string, string>) => {
   if (!obj) return
-  for (const k of ['pppoePrevIp', 'pppoeLastIp', 'pppoeLastAt', 'pppoeLastSuccessTs', 'pppoePending', 'argoDomain', 'argoLastRebuildTs', 'argoLastRebuildAt'] as const) {
+  for (const k of ['pppoePrevIp', 'pppoeLastIp', 'pppoeLastAt', 'pppoeLastSuccessTs', 'pppoeSessionStartTs', 'pppoeCooldownUntilTs', 'pppoePending', 'argoDomain', 'argoLastRebuildTs', 'argoLastRebuildAt'] as const) {
     if (obj[k] != null && obj[k] !== '') (settings.value as any)[k] = obj[k]
   }
   if (obj.pppoePending === 'true' || obj.pppoePending === 'false') settings.value.pppoePending = obj.pppoePending
@@ -455,24 +461,31 @@ onUnmounted(() => {
   cooldownTimer = null
 })
 
-const successTs = () => {
-  const raw = (settings.value.pppoeLastSuccessTs || '').trim()
-  if (!raw) return 0
-  const ts = parseInt(raw, 10)
-  return ts || 0
+const parseTs = (raw: string | undefined) => {
+  const t = (raw || '').trim()
+  if (!t) return 0
+  const n = parseInt(t, 10)
+  return n || 0
+}
+
+const sessionStartTs = () => {
+  const s = parseTs(settings.value.pppoeSessionStartTs)
+  if (s) return s
+  // migrate older field
+  return parseTs(settings.value.pppoeLastSuccessTs)
 }
 
 const cooldownLeft = computed(() => {
   void nowTick.value
-  const ts = successTs()
-  if (!ts) return 0
-  const left = COOLDOWN_SEC - (Math.floor(Date.now() / 1000) - ts)
+  const until = parseTs(settings.value.pppoeCooldownUntilTs)
+  if (!until) return 0
+  const left = until - Math.floor(Date.now() / 1000)
   return left > 0 ? left : 0
 })
 
 const sessionLeft = computed(() => {
   void nowTick.value
-  const ts = successTs()
+  const ts = sessionStartTs()
   if (!ts) return 0
   const left = SESSION_SEC - (Math.floor(Date.now() / 1000) - ts)
   return left > 0 ? left : 0
@@ -501,13 +514,10 @@ const loadData = async () => {
   if (msg.success) {
     setData(msg.obj)
     // #region agent log
-    const raw = String((msg.obj && msg.obj.pppoeLastSuccessTs) || '').trim()
-    const ts = parseInt(raw, 10) || 0
+    const sessTs = parseTs(msg.obj?.pppoeSessionStartTs) || parseTs(msg.obj?.pppoeLastSuccessTs)
+    const coolUntil = parseTs(msg.obj?.pppoeCooldownUntilTs)
     const nowSec = Math.floor(Date.now() / 1000)
-    const elapsed = ts ? nowSec - ts : null
-    const left = ts ? COOLDOWN_SEC - (elapsed as number) : null
-    const sess = ts ? SESSION_SEC - (elapsed as number) : null
-    fetch('http://127.0.0.1:7611/ingest/dfd3c41e-3d1d-41b7-b746-566bc0e53a83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'28da0c'},body:JSON.stringify({sessionId:'28da0c',runId:'post-fix',hypothesisId:'H1',location:'Settings.vue:loadData',message:'pppoe cooldown/tz/session fields',data:{timeLocation:msg.obj?.timeLocation||'',pppoeLastAt:msg.obj?.pppoeLastAt||'',pppoeLastSuccessTs:raw,ts,nowSec,elapsed,cooldownLeft:left,sessionLeft:sess,browserTz:Intl.DateTimeFormat().resolvedOptions().timeZone,scheduleTime:msg.obj?.pppoeScheduleTime||'',scheduleEnable:msg.obj?.pppoeScheduleEnable||'',pppoeEnable:msg.obj?.pppoeEnable||'',lastAutoFire:msg.obj?.pppoeLastAutoFireDate||'',scheduleDays:msg.obj?.pppoeScheduleDays||'',pending:msg.obj?.pppoePending||''},timestamp:Date.now()})}).catch(()=>{})
+    fetch('http://127.0.0.1:7611/ingest/dfd3c41e-3d1d-41b7-b746-566bc0e53a83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'28da0c'},body:JSON.stringify({sessionId:'28da0c',runId:'post-fix',hypothesisId:'H2',location:'Settings.vue:loadData',message:'pppoe session/cooldown/lastAt',data:{timeLocation:msg.obj?.timeLocation||'',pppoeLastAt:msg.obj?.pppoeLastAt||'',pppoeSessionStartTs:msg.obj?.pppoeSessionStartTs||'',pppoeCooldownUntilTs:msg.obj?.pppoeCooldownUntilTs||'',pppoeLastSuccessTs:msg.obj?.pppoeLastSuccessTs||'',sessTs,coolUntil,nowSec,sessionLeft:sessTs?SESSION_SEC-(nowSec-sessTs):null,cooldownLeft:coolUntil?coolUntil-nowSec:null,scheduleDays:msg.obj?.pppoeScheduleDays||'',pending:msg.obj?.pppoePending||'',lastIp:msg.obj?.pppoeLastIp||''},timestamp:Date.now()})}).catch(()=>{})
     // #endregion
   }
 }

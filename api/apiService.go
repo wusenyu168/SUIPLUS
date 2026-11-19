@@ -395,7 +395,8 @@ func parseScriptJSON(text string) map[string]interface{} {
 func pppoeResultFromPayload(payload map[string]interface{}, msg string) map[string]string {
 	result := map[string]string{}
 	for _, k := range []string{
-		"pppoePrevIp", "pppoeLastIp", "pppoeLastAt", "pppoeLastSuccessTs", "pppoePending",
+		"pppoePrevIp", "pppoeLastIp", "pppoeLastAt", "pppoeLastSuccessTs",
+		"pppoeSessionStartTs", "pppoeCooldownUntilTs", "pppoePending",
 		"prev_ip", "last_ip", "last_at", "argoDomain", "argoLastRebuildTs",
 	} {
 		if v, ok := payload[k].(string); ok {
