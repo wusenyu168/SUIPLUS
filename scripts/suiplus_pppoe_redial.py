@@ -240,36 +240,6 @@ def maybe_skip_auto(s: dict[str, str]) -> str | None:
     now = now_panel(s)
     tz_name = panel_tz_name(s)
     days = schedule_days(s)
-    # #region agent log
-    try:
-        _dbg = {
-            "sessionId": "28da0c",
-            "runId": "post-fix",
-            "hypothesisId": "H1",
-            "location": "suiplus_pppoe_redial.py:maybe_skip_auto",
-            "message": "auto gate tz snapshot",
-            "data": {
-                "tzname_os": list(time.tzname),
-                "timeLocation": tz_name,
-                "panel_now": now.isoformat(sep=" ", timespec="seconds"),
-                "local_now": datetime.now().isoformat(sep=" ", timespec="seconds"),
-                "scheduleTime": (s.get("pppoeScheduleTime") or ""),
-                "scheduleEnable": (s.get("pppoeScheduleEnable") or ""),
-                "pppoeEnable": (s.get("pppoeEnable") or ""),
-                "lastAutoFire": (s.get("pppoeLastAutoFireDate") or ""),
-                "sessionStartTs": (s.get("pppoeSessionStartTs") or ""),
-                "cooldownUntilTs": (s.get("pppoeCooldownUntilTs") or ""),
-                "lastSuccessTs": (s.get("pppoeLastSuccessTs") or ""),
-                "lastAt": (s.get("pppoeLastAt") or ""),
-                "pending": (s.get("pppoePending") or ""),
-                "scheduleDays": days,
-            },
-            "timestamp": int(time.time() * 1000),
-        }
-        log("DEBUG_JSON " + json.dumps(_dbg, ensure_ascii=False))
-    except Exception:
-        pass
-    # #endregion
     if s.get("pppoeEnable", "false").lower() not in ("true", "1", "yes"):
         return "动态拨号未启用"
     if s.get("pppoeScheduleEnable", "false").lower() not in ("true", "1", "yes"):

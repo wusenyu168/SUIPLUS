@@ -513,12 +513,6 @@ const loadData = async () => {
   loading.value = false
   if (msg.success) {
     setData(msg.obj)
-    // #region agent log
-    const sessTs = parseTs(msg.obj?.pppoeSessionStartTs) || parseTs(msg.obj?.pppoeLastSuccessTs)
-    const coolUntil = parseTs(msg.obj?.pppoeCooldownUntilTs)
-    const nowSec = Math.floor(Date.now() / 1000)
-    fetch('http://127.0.0.1:7611/ingest/dfd3c41e-3d1d-41b7-b746-566bc0e53a83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'28da0c'},body:JSON.stringify({sessionId:'28da0c',runId:'post-fix',hypothesisId:'H2',location:'Settings.vue:loadData',message:'pppoe session/cooldown/lastAt',data:{timeLocation:msg.obj?.timeLocation||'',pppoeLastAt:msg.obj?.pppoeLastAt||'',pppoeSessionStartTs:msg.obj?.pppoeSessionStartTs||'',pppoeCooldownUntilTs:msg.obj?.pppoeCooldownUntilTs||'',pppoeLastSuccessTs:msg.obj?.pppoeLastSuccessTs||'',sessTs,coolUntil,nowSec,sessionLeft:sessTs?SESSION_SEC-(nowSec-sessTs):null,cooldownLeft:coolUntil?coolUntil-nowSec:null,scheduleDays:msg.obj?.pppoeScheduleDays||'',pending:msg.obj?.pppoePending||'',lastIp:msg.obj?.pppoeLastIp||''},timestamp:Date.now()})}).catch(()=>{})
-    // #endregion
   }
 }
 
