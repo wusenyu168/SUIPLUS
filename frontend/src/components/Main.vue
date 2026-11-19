@@ -63,7 +63,7 @@
       </v-row>
       <v-row>
         <v-col cols="12" sm="6" md="3" v-for="i in reloadItems" :key="i">
-          <v-card class="rounded-lg" variant="outlined" height="210px" elevation="5">
+          <v-card class="rounded-lg sui-home-tile" variant="outlined" height="210px" elevation="2">
             <v-card-title>
               {{ menuItems.flatMap(cat => cat.value).find(m => m.value == i)?.title }}
               <template v-if="i == 'i-sys'">
@@ -293,3 +293,10 @@ const restartSingbox = async () => {
   loading.value = false
 }
 </script>
+
+<style scoped>
+.sui-home-tile {
+  border-color: #e5e9f2 !important;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06) !important;
+}
+</style>

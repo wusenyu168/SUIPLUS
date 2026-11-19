@@ -29,10 +29,21 @@ const isMobile = computed( ():boolean =>{
 <style>
 .v-card-subtitle {
   text-align: center;
-  border-bottom: 1px solid gray;
+  border-bottom: 1px solid #e5e9f2;
   min-height: 20px;
 }
 .v-switch.v-input {
   padding-inline-start: .6rem;
+}
+.v-application {
+  background:
+    radial-gradient(900px 320px at 20% -10%, #dbeafe 0%, transparent 55%),
+    radial-gradient(700px 280px at 100% 0%, #e0e7ff 0%, transparent 45%),
+    #f4f6fb !important;
+}
+.v-theme--dark.v-application {
+  background:
+    radial-gradient(900px 320px at 20% -10%, rgba(37,99,235,.18) 0%, transparent 55%),
+    #0f172a !important;
 }
 </style>

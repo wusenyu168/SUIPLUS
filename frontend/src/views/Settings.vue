@@ -1,257 +1,288 @@
 <template>
-  <v-card :loading="loading">
+  <v-card :loading="loading" class="sui-settings-card">
     <v-tabs
-    v-model="tab"
-    color="primary"
-    align-tabs="center"
-    show-arrows
-  >
-    <v-tab value="t1">{{ $t('setting.interface') }}</v-tab>
-    <v-tab value="t2">{{ $t('setting.sub') }}</v-tab>
-    <v-tab value="t3">{{ $t('setting.jsonSub') }}</v-tab>
-    <v-tab value="t4">{{ $t('setting.clashSub') }}</v-tab>
-    <v-tab value="t5">附加功能</v-tab>
-  </v-tabs>
-  <v-card-text>
-    <v-row align="center" justify="center" style="margin-bottom: 10px;">
-      <v-col cols="auto">
-        <v-btn color="primary" @click="save" :loading="loading" :disabled="!stateChange">
-          {{ $t('actions.save') }}
-        </v-btn>
-      </v-col>
-      <v-col cols="auto">
-        <v-btn variant="outlined" color="warning" @click="restartApp" :loading="loading" :disabled="stateChange">
-          {{ $t('actions.restartApp') }}
-        </v-btn>
-      </v-col>
-    </v-row>
-    <v-window v-model="tab">
-      <v-window-item value="t1">
-        <v-row>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.webListen" :label="$t('setting.addr')" hide-details></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model.number="webPort" min="1" type="number" :label="$t('setting.port')" hide-details></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.webPath" :label="$t('setting.webPath')" hide-details></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.webDomain" :label="$t('setting.domain')" hide-details></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.webKeyFile" :label="$t('setting.sslKey')" hide-details></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.webCertFile" :label="$t('setting.sslCert')" hide-details></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.webURI" :label="$t('setting.webUri')" hide-details></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field
-              type="number"
-              v-model.number="sessionMaxAge"
-              min="0"
-              :label="$t('setting.sessionAge')"
-              :suffix="$t('date.m')"
-              hide-details
+      v-model="tab"
+      color="primary"
+      align-tabs="center"
+      show-arrows
+      class="sui-settings-tabs"
+    >
+      <v-tab value="t1">{{ $t('setting.interface') }}</v-tab>
+      <v-tab value="t2">{{ $t('setting.sub') }}</v-tab>
+      <v-tab value="t3">{{ $t('setting.jsonSub') }}</v-tab>
+      <v-tab value="t4">{{ $t('setting.clashSub') }}</v-tab>
+      <v-tab value="t5">附加功能</v-tab>
+    </v-tabs>
+    <v-card-text>
+      <v-row align="center" justify="center" style="margin-bottom: 10px;">
+        <v-col cols="auto">
+          <v-btn color="primary" @click="save" :loading="loading" :disabled="!stateChange">
+            {{ $t('actions.save') }}
+          </v-btn>
+        </v-col>
+        <v-col cols="auto">
+          <v-btn variant="outlined" color="warning" @click="restartApp" :loading="loading" :disabled="stateChange">
+            {{ $t('actions.restartApp') }}
+          </v-btn>
+        </v-col>
+      </v-row>
+      <v-window v-model="tab">
+        <v-window-item value="t1">
+          <v-row>
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field v-model="settings.webListen" :label="$t('setting.addr')" hide-details></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field v-model.number="webPort" min="1" type="number" :label="$t('setting.port')" hide-details></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field v-model="settings.webPath" :label="$t('setting.webPath')" hide-details></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field v-model="settings.webDomain" :label="$t('setting.domain')" hide-details></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field v-model="settings.webKeyFile" :label="$t('setting.sslKey')" hide-details></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field v-model="settings.webCertFile" :label="$t('setting.sslCert')" hide-details></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field v-model="settings.webURI" :label="$t('setting.webUri')" hide-details></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field
+                type="number"
+                v-model.number="sessionMaxAge"
+                min="0"
+                :label="$t('setting.sessionAge')"
+                :suffix="$t('date.m')"
+                hide-details
               ></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field
-              type="number"
-              v-model.number="trafficAge"
-              min="0"
-              :label="$t('setting.trafficAge')"
-              :suffix="$t('date.d')"
-              hide-details
+            </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field
+                type="number"
+                v-model.number="trafficAge"
+                min="0"
+                :label="$t('setting.trafficAge')"
+                :suffix="$t('date.d')"
+                hide-details
               ></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.timeLocation" :label="$t('setting.timeLoc')" hide-details></v-text-field>
-          </v-col>
-        </v-row>
-      </v-window-item>
+            </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field v-model="settings.timeLocation" :label="$t('setting.timeLoc')" hide-details></v-text-field>
+            </v-col>
+          </v-row>
+        </v-window-item>
 
-      <v-window-item value="t5">
-        <v-row>
-          <v-col cols="12">
-            <v-alert type="info" variant="tonal" density="compact" class="mb-2">
-              先在「界面」填写本机域名并保存；再开启优选。优选/Argo 与 DDNS 已分离。节点域名固定 DNS-only（灰云）。未绑域名时订阅仅公网 IP。
-            </v-alert>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-switch color="primary" v-model="suiplusPreferEnable" label="Argo默认+优选" hide-details />
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-switch color="primary" v-model="cfDdnsEnable" label="Cloudflare DDNS" hide-details />
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field
-              v-model="settings.cfDdnsInterval"
-              label="DDNS 刷新间隔(秒，默认300=5分钟)"
-              hint="仅刷新面板域名解析，不影响优选 SNI"
-              persistent-hint
-              type="number"
-              min="60"
-            ></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.cfDdnsToken" label="CF API Token" hide-details type="password"></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.cfDdnsZone" label="Zone（主域名，勿预填）" hide-details></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.cfDdnsRecord" label="记录名（如 node 或 @）" hide-details></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-btn color="primary" variant="tonal" @click="issueCert" :loading="certLoading" :disabled="certLoading">
-              一键申请证书并绑定
-            </v-btn>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-btn
-              color="success"
-              variant="tonal"
-              @click="copyPanelLink"
-              :disabled="!certReady"
-            >
-              复制面板链接
-            </v-btn>
-          </v-col>
-        </v-row>
+        <v-window-item value="t5">
+          <!-- ① 隧道与域名：功能全保留 -->
+          <v-card variant="outlined" class="sui-block mb-4" rounded="lg">
+            <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2 text-subtitle-1 font-weight-bold">
+              <span>隧道与域名</span>
+              <v-chip size="small" color="primary" variant="tonal">Argo / DDNS / 证书</v-chip>
+            </v-card-title>
+            <v-card-text>
+              <v-alert type="info" variant="tonal" density="compact" class="mb-3">
+                先在「界面」填写本机域名并保存；再开启优选。优选/Argo 与 DDNS 已分离。节点域名固定 DNS-only（灰云）。未绑域名时订阅仅公网 IP。
+              </v-alert>
+              <v-row>
+                <v-col cols="12" sm="6" md="4">
+                  <v-switch color="primary" v-model="suiplusPreferEnable" label="Argo默认+优选" hide-details />
+                </v-col>
+                <v-col cols="12" sm="6" md="4">
+                  <v-switch color="primary" v-model="cfDdnsEnable" label="Cloudflare DDNS" hide-details />
+                </v-col>
+                <v-col cols="12" sm="6" md="4">
+                  <v-text-field
+                    v-model="settings.cfDdnsInterval"
+                    label="DDNS 刷新间隔(秒，默认300=5分钟)"
+                    hint="仅刷新面板域名解析，不影响优选 SNI"
+                    persistent-hint
+                    type="number"
+                    min="60"
+                  ></v-text-field>
+                </v-col>
+                <v-col cols="12" sm="6" md="4">
+                  <v-text-field v-model="settings.cfDdnsToken" label="CF API Token" hide-details type="password"></v-text-field>
+                </v-col>
+                <v-col cols="12" sm="6" md="4">
+                  <v-text-field v-model="settings.cfDdnsZone" label="Zone（主域名，勿预填）" hide-details></v-text-field>
+                </v-col>
+                <v-col cols="12" sm="6" md="4">
+                  <v-text-field v-model="settings.cfDdnsRecord" label="记录名（如 node 或 @）" hide-details></v-text-field>
+                </v-col>
+                <v-col cols="12" sm="6" md="4">
+                  <v-btn color="primary" variant="tonal" block @click="issueCert" :loading="certLoading" :disabled="certLoading">
+                    一键申请证书并绑定
+                  </v-btn>
+                </v-col>
+                <v-col cols="12" sm="6" md="4">
+                  <v-btn
+                    color="success"
+                    variant="tonal"
+                    block
+                    @click="copyPanelLink"
+                    :disabled="!certReady"
+                  >
+                    复制面板链接
+                  </v-btn>
+                </v-col>
+              </v-row>
+            </v-card-text>
+          </v-card>
 
-        <v-divider class="my-4"></v-divider>
-        <v-row>
-          <v-col cols="12">
-            <v-alert type="info" variant="tonal" density="compact" class="mb-2">
-              动态拨号：关联域名填 VPS 服务商域名（不是本面板域名）。满 N 天未换 IP 则在设定时刻自动重拨；手动可随时重拨，成功后 5 分钟冷却。成功后刷新 CF DDNS，不重建优选 SNI。
-            </v-alert>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-switch color="primary" v-model="pppoeEnable" label="动态拨号" hide-details />
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field
-              v-model="settings.pppoeProviderDomain"
-              label="关联域名（服务商域名）"
-              hint="非本 SUI 面板域名"
-              persistent-hint
-            ></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.pppoeAccountId" label="账号 ID" hide-details></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.pppoePassword" label="密码" hide-details type="password"></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-switch color="primary" v-model="pppoeScheduleEnable" label="定时自动重拨" hide-details />
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field
-              v-model="settings.pppoeScheduleDays"
-              label="周期（天，任意 N）"
-              type="number"
-              min="1"
-              hint="满 N 天未换 IP 才自动重拨"
-              persistent-hint
-            ></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field
-              v-model="settings.pppoeScheduleTime"
-              label="时刻 HH:MM"
-              placeholder="03:00"
-              hint="固定时刻，如 03:00"
-              persistent-hint
-            ></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-btn color="warning" variant="tonal" @click="pppoeRedial" :loading="pppoeLoading" :disabled="pppoeLoading">
-              立即重拨
-            </v-btn>
-          </v-col>
-          <v-col cols="12" sm="6" md="4" class="d-flex align-center">
-            <div class="text-medium-emphasis text-body-2">
-              上次 IP：{{ settings.pppoePrevIp || '—' }}　本次 IP：{{ settings.pppoeLastIp || '—' }}
-              <template v-if="settings.pppoeLastAt"><br />时间：{{ settings.pppoeLastAt }}</template>
-            </div>
-          </v-col>
-        </v-row>
+          <!-- ② 动态拨号：功能全保留；时刻改为时/分下拉 -->
+          <v-card variant="outlined" class="sui-block" rounded="lg">
+            <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2 text-subtitle-1 font-weight-bold">
+              <span>动态拨号</span>
+              <v-chip size="small" color="primary" variant="tonal">服务商线路 · 非面板域名</v-chip>
+            </v-card-title>
+            <v-card-text>
+              <v-alert type="info" variant="tonal" density="compact" class="mb-3">
+                动态拨号：关联域名填 VPS 服务商域名（不是本面板域名）。满 N 天未换 IP 则在设定时刻自动重拨；手动可随时重拨，成功后 5 分钟冷却。成功后刷新 CF DDNS，不重建优选 SNI。
+              </v-alert>
+              <v-row>
+                <v-col cols="12" sm="6" md="4">
+                  <v-switch color="primary" v-model="pppoeEnable" label="动态拨号" hide-details />
+                </v-col>
+                <v-col cols="12" sm="6" md="4">
+                  <v-text-field
+                    v-model="settings.pppoeProviderDomain"
+                    label="关联域名（服务商域名）"
+                    hint="非本 SUI 面板域名"
+                    persistent-hint
+                  ></v-text-field>
+                </v-col>
+                <v-col cols="12" sm="6" md="4">
+                  <v-text-field v-model="settings.pppoeAccountId" label="账号 ID" hide-details></v-text-field>
+                </v-col>
+                <v-col cols="12" sm="6" md="4">
+                  <v-text-field v-model="settings.pppoePassword" label="密码" hide-details type="password"></v-text-field>
+                </v-col>
+              </v-row>
 
-        <v-alert class="mt-4" type="info" variant="tonal" density="compact">
-          记录名只填主机名（如 node），Zone 填主域。节点域名固定灰云。动态拨号请先保存；手动成功后 5 分钟内不可再拨。
-        </v-alert>
-      </v-window-item>
+              <v-sheet class="sui-time-group pa-3 mb-3" rounded="lg" border>
+                <v-row align="end">
+                  <v-col cols="12" md="4">
+                    <v-switch color="primary" v-model="pppoeScheduleEnable" label="定时自动重拨" hide-details />
+                    <div class="text-caption text-medium-emphasis mt-1">满 N 天未换 IP 才自动跑</div>
+                  </v-col>
+                  <v-col cols="12" sm="6" md="3">
+                    <v-text-field
+                      v-model="settings.pppoeScheduleDays"
+                      label="周期（天，任意 N）"
+                      type="number"
+                      min="1"
+                      hint="满 N 天未换 IP 才自动重拨"
+                      persistent-hint
+                    ></v-text-field>
+                  </v-col>
+                  <v-col cols="6" sm="3" md="2">
+                    <v-select
+                      v-model="pppoeScheduleHour"
+                      :items="hourOptions"
+                      label="时"
+                      hide-details
+                    ></v-select>
+                  </v-col>
+                  <v-col cols="6" sm="3" md="2">
+                    <v-select
+                      v-model="pppoeScheduleMinute"
+                      :items="minuteOptions"
+                      label="分"
+                      hide-details
+                    ></v-select>
+                  </v-col>
+                </v-row>
+              </v-sheet>
 
-      <v-window-item value="t2">
-        <v-row>
-          <v-col cols="12" sm="6" md="4">
-            <v-switch color="primary" v-model="subEncode" :label="$t('setting.subEncode')" hide-details />
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-switch color="primary" v-model="subShowInfo" :label="$t('setting.subInfo')" hide-details />
-          </v-col>
-        </v-row>
-        <v-row>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.subListen" :label="$t('setting.addr')" hide-details></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field
-              type="number"
-              v-model.number="subPort"
-              min="1"
-              :label="$t('setting.port')"
-              hide-details></v-text-field>
-          </v-col>
-        </v-row>
-        <v-row>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.subKeyFile" :label="$t('setting.sslKey')" hide-details></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.subCertFile" :label="$t('setting.sslCert')" hide-details></v-text-field>
-          </v-col>
-        </v-row>
-        <v-row>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.subDomain" :label="$t('setting.domain')" hide-details></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.subPath" :label="$t('setting.path')" hide-details></v-text-field>
-          </v-col>
-        </v-row>
-        <v-row>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field
-              type="number"
-              v-model.number="subUpdates"
-              min="0"
-              :label="$t('setting.update')"
-              hide-details
+              <v-row>
+                <v-col cols="12" sm="6" md="4">
+                  <v-btn color="warning" variant="tonal" @click="pppoeRedial" :loading="pppoeLoading" :disabled="pppoeLoading">
+                    立即重拨
+                  </v-btn>
+                </v-col>
+                <v-col cols="12" sm="6" md="8" class="d-flex align-center">
+                  <div class="text-medium-emphasis text-body-2">
+                    上次 IP：{{ settings.pppoePrevIp || '—' }}　本次 IP：{{ settings.pppoeLastIp || '—' }}
+                    <template v-if="settings.pppoeLastAt"><br />时间：{{ settings.pppoeLastAt }}</template>
+                  </div>
+                </v-col>
+              </v-row>
+            </v-card-text>
+          </v-card>
+
+          <v-alert class="mt-4" type="info" variant="tonal" density="compact">
+            记录名只填主机名（如 node），Zone 填主域。节点域名固定灰云。动态拨号请先保存；手动成功后 5 分钟内不可再拨。
+          </v-alert>
+        </v-window-item>
+
+        <v-window-item value="t2">
+          <v-row>
+            <v-col cols="12" sm="6" md="4">
+              <v-switch color="primary" v-model="subEncode" :label="$t('setting.subEncode')" hide-details />
+            </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <v-switch color="primary" v-model="subShowInfo" :label="$t('setting.subInfo')" hide-details />
+            </v-col>
+          </v-row>
+          <v-row>
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field v-model="settings.subListen" :label="$t('setting.addr')" hide-details></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field
+                type="number"
+                v-model.number="subPort"
+                min="1"
+                :label="$t('setting.port')"
+                hide-details></v-text-field>
+            </v-col>
+          </v-row>
+          <v-row>
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field v-model="settings.subKeyFile" :label="$t('setting.sslKey')" hide-details></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field v-model="settings.subCertFile" :label="$t('setting.sslCert')" hide-details></v-text-field>
+            </v-col>
+          </v-row>
+          <v-row>
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field v-model="settings.subDomain" :label="$t('setting.domain')" hide-details></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field v-model="settings.subPath" :label="$t('setting.path')" hide-details></v-text-field>
+            </v-col>
+          </v-row>
+          <v-row>
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field
+                type="number"
+                v-model.number="subUpdates"
+                min="0"
+                :label="$t('setting.update')"
+                hide-details
               ></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.subURI" :label="$t('setting.subUri')" hide-details></v-text-field>
-          </v-col>
-        </v-row>
-      </v-window-item>
+            </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field v-model="settings.subURI" :label="$t('setting.subUri')" hide-details></v-text-field>
+            </v-col>
+          </v-row>
+        </v-window-item>
 
-      <v-window-item value="t3">
-        <SubJsonExtVue :settings="settings" />
-      </v-window-item>
+        <v-window-item value="t3">
+          <SubJsonExtVue :settings="settings" />
+        </v-window-item>
 
-      <v-window-item value="t4">
-        <SubClashExtVue :settings="settings" />
-      </v-window-item>
-    </v-window>
-  </v-card-text>
-</v-card>
+        <v-window-item value="t4">
+          <SubClashExtVue :settings="settings" />
+        </v-window-item>
+      </v-window>
+    </v-card-text>
+  </v-card>
 </template>
 
 <script lang="ts" setup>
@@ -311,6 +342,35 @@ const settings = ref({
 })
 const certLoading = ref(false)
 const pppoeLoading = ref(false)
+
+const pad2 = (n: number) => n.toString().padStart(2, '0')
+const hourOptions = Array.from({ length: 24 }, (_, i) => pad2(i))
+const minuteOptions = Array.from({ length: 60 }, (_, i) => pad2(i))
+
+const parseScheduleParts = () => {
+  const raw = (settings.value.pppoeScheduleTime || '03:00').trim()
+  const m = raw.match(/^(\d{1,2}):(\d{1,2})$/)
+  if (!m) return { h: '03', mi: '00' }
+  const h = Math.min(23, Math.max(0, parseInt(m[1], 10)))
+  const mi = Math.min(59, Math.max(0, parseInt(m[2], 10)))
+  return { h: pad2(h), mi: pad2(mi) }
+}
+
+const pppoeScheduleHour = computed({
+  get: () => parseScheduleParts().h,
+  set: (h: string) => {
+    const mi = parseScheduleParts().mi
+    settings.value.pppoeScheduleTime = `${h}:${mi}`
+  }
+})
+
+const pppoeScheduleMinute = computed({
+  get: () => parseScheduleParts().mi,
+  set: (mi: string) => {
+    const h = parseScheduleParts().h
+    settings.value.pppoeScheduleTime = `${h}:${mi}`
+  }
+})
 
 /** 证书已绑定：域名 + 证书/密钥路径齐全后，才允许复制面板链接 */
 const certReady = computed(() => {
@@ -566,3 +626,18 @@ const stateChange = computed(() => {
   return !FindDiff.deepCompare(settings.value,oldSettings.value)
 })
 </script>
+
+<style scoped>
+.sui-settings-card {
+  border: 1px solid #e5e9f2;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06) !important;
+}
+.sui-block {
+  background: #fff;
+  border-color: #e5e9f2 !important;
+}
+.sui-time-group {
+  background: #f8fafc;
+  border-style: dashed !important;
+}
+</style>

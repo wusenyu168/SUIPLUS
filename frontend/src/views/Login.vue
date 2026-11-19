@@ -1,27 +1,32 @@
 <template>
-    <v-container class="fill-height" style="margin-top: 100px;">
+  <div class="sui-login-wrap">
+    <v-container class="fill-height">
       <v-row justify="center" align="center">
         <v-col cols="12" sm="8" md="4">
-          <v-card>
-            <v-card-title class="headline" v-text="$t('login.title')"></v-card-title>
-            <v-card-text>
+          <v-card class="sui-login-card" rounded="xl" elevation="8">
+            <v-card-text class="pa-6">
+              <div class="sui-login-brand text-center mb-5">
+                <div class="sui-login-logo mx-auto mb-3">S</div>
+                <div class="text-h5 font-weight-bold">SUIPLUS</div>
+                <div class="text-body-2 text-medium-emphasis mt-1" v-text="$t('login.title')"></div>
+              </div>
               <v-form @submit.prevent="login" ref="form">
-                <v-text-field v-model="username" :label="$t('login.username')" :rules="usernameRules" required></v-text-field>
-                <v-text-field v-model="password" :label="$t('login.password')" :rules="passwordRules" type="password" required></v-text-field>
-                <v-btn :loading="loading" type="submit" color="primary" block class="mt-2" v-text="$t('actions.submit')"></v-btn>
+                <v-text-field v-model="username" :label="$t('login.username')" :rules="usernameRules" required class="mb-2"></v-text-field>
+                <v-text-field v-model="password" :label="$t('login.password')" :rules="passwordRules" type="password" required class="mb-2"></v-text-field>
+                <v-btn :loading="loading" type="submit" color="primary" block size="large" class="mt-2" v-text="$t('actions.submit')"></v-btn>
               </v-form>
               <v-select
                 density="compact"
-                class="mt-2"
+                class="mt-4"
                 hide-details
-                variant="solo"
+                variant="solo-filled"
                 :items="languages"
                 v-model="$i18n.locale"
                 @update:modelValue="changeLocale">
                 <template v-slot:append>
                   <v-menu>
                     <template v-slot:activator="{ props }">
-                      <v-btn icon v-bind="props">
+                      <v-btn icon v-bind="props" variant="text">
                         <v-icon>mdi-theme-light-dark</v-icon>
                       </v-btn>
                     </template>
@@ -44,8 +49,9 @@
         </v-col>
       </v-row>
     </v-container>
-  </template>
-  
+  </div>
+</template>
+
 <script lang="ts" setup>
 import { ref } from "vue"
 import { useLocale,useTheme } from 'vuetify'
@@ -108,3 +114,28 @@ const isActiveTheme = (th: string) => {
   return current == th
 }
 </script>
+
+<style scoped>
+.sui-login-wrap {
+  min-height: 100vh;
+  background:
+    radial-gradient(800px 360px at 15% 10%, #bfdbfe 0%, transparent 50%),
+    radial-gradient(700px 320px at 90% 90%, #c7d2fe 0%, transparent 45%),
+    #f4f6fb;
+}
+.sui-login-card {
+  border: 1px solid #e5e9f2;
+}
+.sui-login-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: #fff;
+  font-size: 18px;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.35);
+}
+</style>

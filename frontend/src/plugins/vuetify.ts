@@ -18,17 +18,23 @@ import { createVuetify } from 'vuetify'
 export default createVuetify({
   defaults: {
     VRow: { density: 'compact' },
+    VBtn: { rounded: 'lg' },
+    VCard: { rounded: 'lg', elevation: 2 },
     VTextField: {
       variant: 'solo-filled',
+      rounded: 'lg',
     },
     VSelect: {
       variant: 'solo-filled',
+      rounded: 'lg',
     },
     VCombobox: {
       variant: 'solo-filled',
+      rounded: 'lg',
     },
     VTextarea: {
       variant: 'solo-filled',
+      rounded: 'lg',
     },
   },
   theme: {
@@ -36,14 +42,26 @@ export default createVuetify({
     themes: {
       light: {
         colors: {
-          error: '#FF5252',
-          background: colors.grey.lighten4,
+          primary: '#2563EB',
+          secondary: '#64748B',
+          success: '#16A34A',
+          warning: '#EA580C',
+          error: '#DC2626',
+          info: '#0284C7',
+          background: '#F4F6FB',
+          surface: '#FFFFFF',
         },
       },
       dark: {
         colors: {
-          primary: colors.blue.darken4,
+          primary: '#3B82F6',
+          secondary: '#94A3B8',
+          success: '#22C55E',
+          warning: '#F97316',
           error: colors.red.accent3,
+          info: '#38BDF8',
+          background: '#0F172A',
+          surface: '#1E293B',
         },
       },
     },

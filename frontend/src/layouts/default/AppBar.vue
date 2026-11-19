@@ -1,11 +1,11 @@
 <template>
-  <v-app-bar :elevation="5">
+  <v-app-bar :elevation="0" class="sui-appbar" border="b">
     <v-icon v-if="isMobile" icon="mdi-menu" @click="$emit('toggleDrawer')" />
     <span v-else style="width: 24px"></span>
-    <v-app-bar-title :text="$t(<string>route.name)" class="align-center text-center " />
+    <v-app-bar-title :text="$t(<string>route.name)" class="align-center text-center sui-title" />
     <v-menu>
       <template v-slot:activator="{ props }">
-        <v-btn icon v-bind="props">
+        <v-btn icon v-bind="props" variant="text">
           <v-icon>mdi-translate</v-icon>
         </v-btn>
       </template>
@@ -22,7 +22,7 @@
     </v-menu>
     <v-menu>
       <template v-slot:activator="{ props }">
-        <v-btn icon v-bind="props">
+        <v-btn icon v-bind="props" variant="text">
           <v-icon>mdi-theme-light-dark</v-icon>
         </v-btn>
       </template>
@@ -76,3 +76,13 @@ const isActiveTheme = (th: string) => {
   return current == th
 }
 </script>
+
+<style scoped>
+.sui-appbar {
+  backdrop-filter: blur(8px);
+  background: rgba(255, 255, 255, 0.72) !important;
+}
+.sui-title {
+  font-weight: 700 !important;
+}
+</style>
