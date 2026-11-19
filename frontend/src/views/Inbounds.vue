@@ -105,7 +105,7 @@ import Data from '@/store/modules/data'
 import InboundVue from '@/layouts/modals/Inbound.vue'
 import Stats from '@/layouts/modals/Stats.vue'
 import { Config } from '@/types/config'
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { createInbound, Inbound } from '@/types/inbounds'
 import RandomUtil from '@/plugins/randomUtil'
 
@@ -195,13 +195,4 @@ const showStats = (tag: string) => {
 const closeStats = () => {
   stats.value.visible = false
 }
-
-// #region agent log
-onMounted(() => {
-  const cards = document.querySelectorAll('.sui-entity-card')
-  const sample = cards[0] as HTMLElement | undefined
-  const actions = sample?.querySelector('.v-card-actions') as HTMLElement | undefined
-  fetch('http://127.0.0.1:7611/ingest/dfd3c41e-3d1d-41b7-b746-566bc0e53a83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'28da0c'},body:JSON.stringify({sessionId:'28da0c',runId:'layout-fix',hypothesisId:'H3',location:'Inbounds.vue:onMounted',message:'inbound card layout metrics',data:{cardCount:cards.length,cardWidth:sample?.offsetWidth||0,actionsJustify:actions?getComputedStyle(actions).justifyContent:'',hasEntityClass:!!sample},timestamp:Date.now()})}).catch(()=>{})
-})
-// #endregion
 </script>

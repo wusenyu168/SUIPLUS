@@ -407,11 +407,6 @@ onMounted(async () => {
   loading.value = true
   await loadData()
   loading.value = false
-  // #region agent log
-  const toolbar = document.querySelector('.sui-settings-toolbar') as HTMLElement | undefined
-  const timePair = document.querySelector('.sui-time-pair') as HTMLElement | undefined
-  fetch('http://127.0.0.1:7611/ingest/dfd3c41e-3d1d-41b7-b746-566bc0e53a83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'28da0c'},body:JSON.stringify({sessionId:'28da0c',runId:'layout-fix',hypothesisId:'H1',location:'Settings.vue:onMounted',message:'settings toolbar/layout presence',data:{hasToolbar:!!toolbar,toolbarDisplay:toolbar?getComputedStyle(toolbar).display:'',hasTimePair:!!timePair,tab:tab.value},timestamp:Date.now()})}).catch(()=>{})
-  // #endregion
 })
 
 const loadData = async () => {
