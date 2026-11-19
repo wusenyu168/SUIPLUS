@@ -169,6 +169,7 @@ jobs:
             suiplus_sync_prefer.py \
             suiplus_after_settings.py \
             suiplus_apply_ddns_timer.py \
+            suiplus_pppoe_redial.py \
             suiplus_argo.sh \
             suiplus_issue_cert.sh \
             suiplus_panel_hairpin.sh \

@@ -515,8 +515,15 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
         "cfDdnsRecord": "",
         "cfDdnsInterval": "300",
         "cfDdnsProxied": "false",
-        # 优选固定隧道：与面板同域；默认关，绑域名后再开（不随 DDNS timer 重建 Argo）
+        # 优选：默认关，绑域名后再开（不随 DDNS timer 重建 Argo）
         "suiplusPreferEnable": "false",
+        "pppoeEnable": "false",
+        "pppoeProviderDomain": "",
+        "pppoeAccountId": "",
+        "pppoePassword": "",
+        "pppoeLastIp": "",
+        "pppoePrevIp": "",
+        "pppoeLastAt": "",
     }.items():
         upsert_setting(cur, k, v)
 

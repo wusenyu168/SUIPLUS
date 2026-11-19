@@ -9,6 +9,7 @@
 - `suiplusPreferEnable` 默认关闭
 - `cfDdnsEnable` 默认关闭
 - `cfDdnsInterval` 默认 **300**（5 分钟）
+- `pppoeEnable` 默认关闭
 
 ## 1. 手动绑定域名
 
@@ -16,7 +17,7 @@
 
 ## 2. 优选 / Argo（与 DDNS 分离）
 
-- 开关：`suiplusPreferEnable`
+- 开关文案：`Argo默认+优选`（`suiplusPreferEnable`）
 - 前提：已填写 `webDomain`
 - SNI/Host = Cloudflare Quick Tunnel 临时域；优选1/2 入口为 CF CDN 域名
 - **触发：** 保存设置 / 开机 `suiplus-prefer.service` / `suiplus_after_settings.py`
@@ -28,15 +29,23 @@
 - `cfDdnsEnable` + Token / Zone / 记录名 / **`cfDdnsInterval`（秒，默认 300）**
 - Timer 由 `suiplus_apply_ddns_timer.py` 按库内间隔重写（菜单可改）
 - oneshot **仅** `cf_ddns.py` + `sync_addrs`（TUD 域名/IP），**不调用** prefer/Argo
-- 仅 DNS（默认非橙云）
+- **固定灰云**（`proxied=false`）；橙云开关已移除
 
 ## 4. 一键申请证书并绑定
 
+- 设置页 Tab 名：**附加功能**（仍含证书按钮）
 - 依赖已绑定的 `webDomain`（为空则拒绝）
 - 优先 DNS-01（CF Token）；否则 HTTP-01
 - 写入 `webCertFile` / `webKeyFile`（及订阅证书路径）
 - 成功后走 `suiplus_after_settings.py`
 
-## 5. 持久化
+## 5. 动态拨号
 
-UUID、端口、TLS/Reality、域名、证书路径、DDNS/优选开关均在 SQLite；重启不丢。仅清库或 `--force` 种子才重置入站。
+- 开关：`pppoeEnable`
+- **关联域名** `pppoeProviderDomain` = VPS **服务商域名**（不是本面板 `webDomain`）
+- 账号 ID / 密码；「立即重拨」→ 换 IP → 立即跑 CF DDNS + sync_addrs
+- **不**重建 Argo / 优选 SNI
+
+## 6. 持久化
+
+UUID、端口、TLS/Reality、域名、证书路径、DDNS/优选/拨号开关均在 SQLite；重启不丢。仅清库或 `--force` 种子才重置入站。

@@ -73,6 +73,7 @@ install_suiplus_helpers() {
         suiplus_sync_prefer.py
         suiplus_after_settings.py
         suiplus_apply_ddns_timer.py
+        suiplus_pppoe_redial.py
         suiplus_argo.sh
         suiplus_issue_cert.sh
         suiplus_panel_hairpin.sh
@@ -268,7 +269,7 @@ install_suiplus() {
     url="${info#*|}"
 
     echo -e "${yellow}一键安装/更新下载的是 GitHub Release 二进制（${ver}），不是 git clone 源码目录。${plain}"
-    echo -e "${yellow}请确保已发布与 config/version 一致的 Release（当前源码为 1.6.7 → 标签 v1.6.7），否则会装到旧包。${plain}"
+    echo -e "${yellow}请确保已发布与 config/version 一致的 Release（当前源码为 1.6.9 → 标签 v1.6.9），否则会装到旧包。${plain}"
     echo -e "下载：${url}"
     if ! wget -N --no-check-certificate -O "/tmp/s-ui-linux-${arch_name}.tar.gz" "${url}"; then
         echo -e "${red}下载失败${plain}"

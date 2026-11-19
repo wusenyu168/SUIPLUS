@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"os/exec"
 	"strconv"
@@ -378,6 +379,63 @@ func (a *ApiService) IssueCert(c *gin.Context) {
 	}
 	_ = exec.Command("python3", "/usr/local/s-ui/scripts/suiplus_after_settings.py").Run()
 	jsonMsgObj(c, "issueCert", result, nil)
+}
+
+func (a *ApiService) PppoeRedial(c *gin.Context) {
+	script := "/usr/local/s-ui/scripts/suiplus_pppoe_redial.py"
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "python3", script).CombinedOutput()
+	text := strings.TrimSpace(string(out))
+	if ctx.Err() == context.DeadlineExceeded {
+		jsonMsg(c, "pppoeRedial", common.NewError("重拨超时，请稍后查看日志 /var/log/suiplus-pppoe.log"))
+		return
+	}
+	// Script prints a final JSON line with ok/msg/ips
+	var payload map[string]interface{}
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "{") && strings.Contains(line, "\"ok\"") {
+			_ = json.Unmarshal([]byte(line), &payload)
+		}
+	}
+	if payload == nil {
+		if err != nil {
+			jsonMsg(c, "pppoeRedial", common.NewError(text, " | ", err.Error()))
+			return
+		}
+		jsonMsg(c, "pppoeRedial", common.NewError(text))
+		return
+	}
+	ok, _ := payload["ok"].(bool)
+	msg, _ := payload["msg"].(string)
+	if !ok {
+		if msg == "" {
+			msg = "重拨失败"
+		}
+		jsonMsg(c, "pppoeRedial", common.NewError(msg))
+		return
+	}
+	result := map[string]string{}
+	for _, k := range []string{"pppoePrevIp", "pppoeLastIp", "pppoeLastAt", "prev_ip", "last_ip", "last_at"} {
+		if v, ok := payload[k].(string); ok {
+			result[k] = v
+		}
+	}
+	if result["pppoePrevIp"] == "" {
+		result["pppoePrevIp"] = result["prev_ip"]
+	}
+	if result["pppoeLastIp"] == "" {
+		result["pppoeLastIp"] = result["last_ip"]
+	}
+	if result["pppoeLastAt"] == "" {
+		result["pppoeLastAt"] = result["last_at"]
+	}
+	if msg != "" {
+		result["message"] = msg
+	}
+	// Empty msg avoids i18n actions.* toast; frontend shows message.
+	jsonObj(c, result, nil)
 }
 
 func (a *ApiService) RestartSb(c *gin.Context) {

@@ -73,9 +73,17 @@ var defaultValueMap = map[string]string{
 	"cfDdnsZone":     "",
 	"cfDdnsRecord":   "",
 	"cfDdnsInterval": "300",
-	"cfDdnsProxied":  "false",
-	// Prefer / fixed-tunnel (Argo) — synced separately from DDNS timer
+	"cfDdnsProxied":  "false", // deprecated UI; DDNS always writes proxied=false
+	// Prefer / Argo — synced separately from DDNS timer
 	"suiplusPreferEnable": "false",
+	// Dynamic redial (VPS provider account — not panel webDomain)
+	"pppoeEnable":         "false",
+	"pppoeProviderDomain": "",
+	"pppoeAccountId":      "",
+	"pppoePassword":       "",
+	"pppoeLastIp":         "",
+	"pppoePrevIp":         "",
+	"pppoeLastAt":         "",
 }
 
 type SettingService struct {

@@ -81,7 +81,8 @@ def main() -> int:
     # CF zone/record names are case-insensitive; normalize to lowercase FQDN
     zone = (s.get("cfDdnsZone") or "").strip().lower().rstrip(".")
     record = (s.get("cfDdnsRecord") or "@").strip().lower().rstrip(".")
-    proxied = s.get("cfDdnsProxied", "false").lower() in ("true", "1", "yes")
+    # Node/panel domains must stay DNS-only (grey cloud). UI toggle removed.
+    proxied = False
     if not token or not zone:
         log("skip: missing cfDdnsToken or cfDdnsZone")
         return 0

@@ -10,7 +10,7 @@
     <v-tab value="t2">{{ $t('setting.sub') }}</v-tab>
     <v-tab value="t3">{{ $t('setting.jsonSub') }}</v-tab>
     <v-tab value="t4">{{ $t('setting.clashSub') }}</v-tab>
-    <v-tab value="t5">域名证书</v-tab>
+    <v-tab value="t5">附加功能</v-tab>
   </v-tabs>
   <v-card-text>
     <v-row align="center" justify="center" style="margin-bottom: 10px;">
@@ -79,17 +79,14 @@
         <v-row>
           <v-col cols="12">
             <v-alert type="info" variant="tonal" density="compact" class="mb-2">
-              先在「界面」填写本机域名并保存；再开启优选。优选/Argo 与 DDNS 定时刷新已分离，DDNS 不会重建隧道 SNI。未绑域名时订阅仅公网 IP。
+              先在「界面」填写本机域名并保存；再开启优选。优选/Argo 与 DDNS 已分离。节点域名固定 DNS-only（灰云）。未绑域名时订阅仅公网 IP。
             </v-alert>
           </v-col>
           <v-col cols="12" sm="6" md="4">
-            <v-switch color="primary" v-model="suiplusPreferEnable" label="梭哈式固定隧道优选（Argo默认+优选）" hide-details />
+            <v-switch color="primary" v-model="suiplusPreferEnable" label="Argo默认+优选" hide-details />
           </v-col>
           <v-col cols="12" sm="6" md="4">
             <v-switch color="primary" v-model="cfDdnsEnable" label="Cloudflare DDNS" hide-details />
-          </v-col>
-          <v-col cols="12" sm="6" md="4">
-            <v-switch color="primary" v-model="cfDdnsProxied" label="橙云代理(节点域名请关闭)" hide-details />
           </v-col>
           <v-col cols="12" sm="6" md="4">
             <v-text-field
@@ -126,8 +123,46 @@
             </v-btn>
           </v-col>
         </v-row>
+
+        <v-divider class="my-4"></v-divider>
+        <v-row>
+          <v-col cols="12">
+            <v-alert type="info" variant="tonal" density="compact" class="mb-2">
+              动态拨号：关联域名填 VPS 服务商域名（不是本面板域名）。重拨成功后会立即刷新 CF DDNS，不重建优选 SNI。
+            </v-alert>
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-switch color="primary" v-model="pppoeEnable" label="动态拨号" hide-details />
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-text-field
+              v-model="settings.pppoeProviderDomain"
+              label="关联域名（服务商域名）"
+              hint="非本 SUI 面板域名"
+              persistent-hint
+            ></v-text-field>
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-text-field v-model="settings.pppoeAccountId" label="账号 ID" hide-details></v-text-field>
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-text-field v-model="settings.pppoePassword" label="密码" hide-details type="password"></v-text-field>
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-btn color="warning" variant="tonal" @click="pppoeRedial" :loading="pppoeLoading" :disabled="pppoeLoading">
+              立即重拨
+            </v-btn>
+          </v-col>
+          <v-col cols="12" sm="6" md="4" class="d-flex align-center">
+            <div class="text-medium-emphasis text-body-2">
+              上次 IP：{{ settings.pppoePrevIp || '—' }}　本次 IP：{{ settings.pppoeLastIp || '—' }}
+              <template v-if="settings.pppoeLastAt"><br />时间：{{ settings.pppoeLastAt }}</template>
+            </div>
+          </v-col>
+        </v-row>
+
         <v-alert class="mt-4" type="info" variant="tonal" density="compact">
-          记录名只填主机名（如 node），Zone 填主域（如 douyin.uk）。节点域名请关闭橙云。证书成功后「复制面板链接」才会可点，避免重复申请。
+          记录名只填主机名（如 node），Zone 填主域。节点域名固定灰云。证书成功后「复制面板链接」才会可点。动态拨号请先保存再点重拨。
         </v-alert>
       </v-window-item>
 
@@ -239,8 +274,16 @@ const settings = ref({
   cfDdnsInterval: "300",
   cfDdnsProxied: "false",
   suiplusPreferEnable: "false",
+  pppoeEnable: "false",
+  pppoeProviderDomain: "",
+  pppoeAccountId: "",
+  pppoePassword: "",
+  pppoeLastIp: "",
+  pppoePrevIp: "",
+  pppoeLastAt: "",
 })
 const certLoading = ref(false)
+const pppoeLoading = ref(false)
 
 /** 证书已绑定：域名 + 证书/密钥路径齐全后，才允许复制面板链接 */
 const certReady = computed(() => {
@@ -353,14 +396,14 @@ const cfDdnsEnable = computed({
   set: (v:boolean) => { settings.value.cfDdnsEnable = v ? "true" : "false" }
 })
 
-const cfDdnsProxied = computed({
-  get: () => { return settings.value.cfDdnsProxied == "true" },
-  set: (v:boolean) => { settings.value.cfDdnsProxied = v ? "true" : "false" }
-})
-
 const suiplusPreferEnable = computed({
   get: () => { return settings.value.suiplusPreferEnable == "true" },
   set: (v:boolean) => { settings.value.suiplusPreferEnable = v ? "true" : "false" }
+})
+
+const pppoeEnable = computed({
+  get: () => { return settings.value.pppoeEnable == "true" },
+  set: (v:boolean) => { settings.value.pppoeEnable = v ? "true" : "false" }
 })
 
 const copyPanelLink = async () => {
@@ -388,6 +431,34 @@ const deriveDomainFromDdns = () => {
   if (!record || record === '@') return zone.toLowerCase()
   if (record.includes('.')) return record.toLowerCase()
   return `${record}.${zone}`.toLowerCase()
+}
+
+const pppoeRedial = async () => {
+  if (pppoeLoading.value) return
+  // Persist credentials first
+  await HttpUtils.post('api/save', { object: 'settings', action: 'set', data: JSON.stringify(settings.value) })
+  pppoeLoading.value = true
+  const msg = await HttpUtils.post('api/pppoeRedial', {})
+  if (msg.success) {
+    const obj = (msg.obj || {}) as Record<string, string>
+    if (obj.pppoePrevIp != null) settings.value.pppoePrevIp = obj.pppoePrevIp
+    if (obj.pppoeLastIp != null) settings.value.pppoeLastIp = obj.pppoeLastIp
+    if (obj.pppoeLastAt != null) settings.value.pppoeLastAt = obj.pppoeLastAt
+    oldSettings.value = { ...settings.value }
+    push.success({
+      title: i18n.global.t('success'),
+      duration: 8000,
+      message: obj.message || msg.msg || `重拨完成 ${obj.pppoePrevIp || ''} → ${obj.pppoeLastIp || ''}`
+    })
+    await loadData()
+  } else {
+    push.error({
+      title: i18n.global.t('error'),
+      duration: 10000,
+      message: (msg.msg || '').replace(/^pppoeRedial:\s*/i, '') || '重拨失败'
+    })
+  }
+  pppoeLoading.value = false
 }
 
 const issueCert = async () => {

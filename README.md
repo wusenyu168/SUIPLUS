@@ -13,12 +13,13 @@ bash <(curl -Ls https://raw.githubusercontent.com/wusenyu168/SUIPLUS/main/instal
 指定版本（需已发布对应 Release；**一键安装拉的是 Release 包，不是 main 源码即时编译**）：
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/wusenyu168/SUIPLUS/main/install.sh) v1.6.8
+bash <(curl -Ls https://raw.githubusercontent.com/wusenyu168/SUIPLUS/main/install.sh) v1.6.9
 ```
 
-当前源码版本见 `config/version`（应为 `1.6.8`）。发布后 Latest Release 也必须是 `v1.6.8`，否则重装/更新仍会落到旧包。
+当前源码版本见 `config/version`（应为 `1.6.9`）。发布后 Latest Release 也必须是 `v1.6.9`，否则重装/更新仍会落到旧包。
 
-**1.6.8：** 优选/Argo 与 DDNS 定时器分离（避免未重启换 SNI）；DDNS 刷新间隔菜单生效，默认 300 秒。
+**1.6.9：** 附加功能页；Argo 文案精简；移除橙云（强制灰云）；动态拨号（服务商域名 + 重拨后刷 DDNS）。  
+**1.6.8：** 优选/Argo 与 DDNS 定时器分离；DDNS 间隔菜单生效，默认 300 秒。
 
 安装后管理菜单：
 

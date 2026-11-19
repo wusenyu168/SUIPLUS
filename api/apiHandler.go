@@ -48,6 +48,8 @@ func (a *APIHandler) postHandler(c *gin.Context) {
 		a.ApiService.RestartSb(c)
 	case "issueCert":
 		a.ApiService.IssueCert(c)
+	case "pppoeRedial":
+		a.ApiService.PppoeRedial(c)
 	case "linkConvert":
 		a.ApiService.LinkConvert(c)
 	case "subConvert":
