@@ -41,44 +41,38 @@
     </v-col>
   </v-row>
   <v-row>
-    <v-col cols="12" sm="4" md="3" lg="2" v-for="(item, index) in <any[]>outbounds" :key="item.tag">
-      <v-card rounded="xl" elevation="5" min-width="200" :title="item.tag">
-        <v-card-subtitle style="margin-top: -15px;">
+    <v-col cols="12" sm="6" md="4" lg="3" v-for="(item, index) in <any[]>outbounds" :key="item.tag">
+      <v-card class="sui-entity-card" rounded="lg" elevation="2" :title="item.tag">
+        <v-card-subtitle>
           <v-row>
             <v-col>{{ item.type }}</v-col>
           </v-row>
         </v-card-subtitle>
         <v-card-text>
-          <v-row>
-            <v-col>{{ $t('in.addr') }}</v-col>
-            <v-col>
-              {{ item.server?? '-' }}
-            </v-col>
-          </v-row>
-          <v-row>
-            <v-col>{{ $t('in.port') }}</v-col>
-            <v-col>
-              {{ item.server_port?? '-' }}
-            </v-col>
-          </v-row>
-          <v-row>
-            <v-col>{{ $t('objects.tls') }}</v-col>
-            <v-col>
-              {{ Object.hasOwn(item,'tls') ? $t(item.tls?.enabled ? 'enable' : 'disable') : '-'  }}
-            </v-col>
-          </v-row>
-          <v-row>
-            <v-col>{{ $t('online') }}</v-col>
-            <v-col>
+          <div class="sui-kv-row">
+            <span class="k">{{ $t('in.addr') }}</span>
+            <span class="v" :title="item.server || '-'">{{ item.server?? '-' }}</span>
+          </div>
+          <div class="sui-kv-row">
+            <span class="k">{{ $t('in.port') }}</span>
+            <span class="v">{{ item.server_port?? '-' }}</span>
+          </div>
+          <div class="sui-kv-row">
+            <span class="k">{{ $t('objects.tls') }}</span>
+            <span class="v">{{ Object.hasOwn(item,'tls') ? $t(item.tls?.enabled ? 'enable' : 'disable') : '-'  }}</span>
+          </div>
+          <div class="sui-kv-row">
+            <span class="k">{{ $t('online') }}</span>
+            <span class="v">
               <template v-if="onlines.includes(item.tag)">
                 <v-chip density="comfortable" size="small" color="success" variant="flat">{{ $t('online') }}</v-chip>
               </template>
               <template v-else>-</template>
-            </v-col>
-          </v-row>
-          <v-row>
-            <v-col>{{ $t('out.delay') }}</v-col>
-            <v-col>
+            </span>
+          </div>
+          <div class="sui-kv-row">
+            <span class="k">{{ $t('out.delay') }}</span>
+            <span class="v" style="display:flex;align-items:center;gap:6px;white-space:normal;">
               <v-progress-circular
                 v-if="checkResults[item.tag]?.loading"
                 indeterminate
@@ -109,11 +103,11 @@
                   </v-tooltip>
                 </template>
               </template>
-            </v-col>
-          </v-row>
+            </span>
+          </div>
         </v-card-text>
         <v-divider></v-divider>
-        <v-card-actions style="padding: 0;">
+        <v-card-actions>
           <v-btn icon="mdi-file-edit" @click="showModal(item.id)">
             <v-icon />
             <v-tooltip activator="parent" location="top" :text="$t('actions.edit')"></v-tooltip>

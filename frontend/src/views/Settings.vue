@@ -1,31 +1,28 @@
 <template>
   <v-card :loading="loading" class="sui-settings-card">
-    <v-tabs
-      v-model="tab"
-      color="primary"
-      align-tabs="center"
-      show-arrows
-      class="sui-settings-tabs"
-    >
-      <v-tab value="t1">{{ $t('setting.interface') }}</v-tab>
-      <v-tab value="t2">{{ $t('setting.sub') }}</v-tab>
-      <v-tab value="t3">{{ $t('setting.jsonSub') }}</v-tab>
-      <v-tab value="t4">{{ $t('setting.clashSub') }}</v-tab>
-      <v-tab value="t5">附加功能</v-tab>
-    </v-tabs>
+    <div class="sui-settings-toolbar">
+      <v-tabs
+        v-model="tab"
+        color="primary"
+        show-arrows
+        class="sui-settings-tabs"
+      >
+        <v-tab value="t1" rounded="pill">{{ $t('setting.interface') }}</v-tab>
+        <v-tab value="t2" rounded="pill">{{ $t('setting.sub') }}</v-tab>
+        <v-tab value="t3" rounded="pill">{{ $t('setting.jsonSub') }}</v-tab>
+        <v-tab value="t4" rounded="pill">{{ $t('setting.clashSub') }}</v-tab>
+        <v-tab value="t5" rounded="pill">附加功能</v-tab>
+      </v-tabs>
+      <div class="sui-settings-actions">
+        <v-btn color="primary" @click="save" :loading="loading" :disabled="!stateChange">
+          {{ $t('actions.save') }}
+        </v-btn>
+        <v-btn variant="outlined" color="warning" @click="restartApp" :loading="loading" :disabled="stateChange">
+          {{ $t('actions.restartApp') }}
+        </v-btn>
+      </div>
+    </div>
     <v-card-text>
-      <v-row align="center" justify="center" style="margin-bottom: 10px;">
-        <v-col cols="auto">
-          <v-btn color="primary" @click="save" :loading="loading" :disabled="!stateChange">
-            {{ $t('actions.save') }}
-          </v-btn>
-        </v-col>
-        <v-col cols="auto">
-          <v-btn variant="outlined" color="warning" @click="restartApp" :loading="loading" :disabled="stateChange">
-            {{ $t('actions.restartApp') }}
-          </v-btn>
-        </v-col>
-      </v-row>
       <v-window v-model="tab">
         <v-window-item value="t1">
           <v-row>
@@ -77,7 +74,7 @@
         </v-window-item>
 
         <v-window-item value="t5">
-          <!-- ① 隧道与域名：功能全保留 -->
+          <!-- ① 隧道与域名：栅格对齐演示稿 -->
           <v-card variant="outlined" class="sui-block mb-4" rounded="lg">
             <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2 text-subtitle-1 font-weight-bold">
               <span>隧道与域名</span>
@@ -87,34 +84,38 @@
               <v-alert type="info" variant="tonal" density="compact" class="mb-3">
                 先在「界面」填写本机域名并保存；再开启优选。优选/Argo 与 DDNS 已分离。节点域名固定 DNS-only（灰云）。未绑域名时订阅仅公网 IP。
               </v-alert>
-              <v-row>
-                <v-col cols="12" sm="6" md="4">
+              <v-row class="mb-1">
+                <v-col cols="12" sm="6">
                   <v-switch color="primary" v-model="suiplusPreferEnable" label="Argo默认+优选" hide-details />
                 </v-col>
-                <v-col cols="12" sm="6" md="4">
+                <v-col cols="12" sm="6">
                   <v-switch color="primary" v-model="cfDdnsEnable" label="Cloudflare DDNS" hide-details />
                 </v-col>
-                <v-col cols="12" sm="6" md="4">
+              </v-row>
+              <v-row>
+                <v-col cols="12" md="4">
                   <v-text-field
                     v-model="settings.cfDdnsInterval"
-                    label="DDNS 刷新间隔(秒，默认300=5分钟)"
+                    label="DDNS 刷新间隔（秒）"
                     hint="仅刷新面板域名解析，不影响优选 SNI"
                     persistent-hint
                     type="number"
                     min="60"
                   ></v-text-field>
                 </v-col>
-                <v-col cols="12" sm="6" md="4">
+                <v-col cols="12" md="4">
                   <v-text-field v-model="settings.cfDdnsToken" label="CF API Token" hide-details type="password"></v-text-field>
                 </v-col>
-                <v-col cols="12" sm="6" md="4">
-                  <v-text-field v-model="settings.cfDdnsZone" label="Zone（主域名，勿预填）" hide-details></v-text-field>
+                <v-col cols="12" md="4">
+                  <v-text-field v-model="settings.cfDdnsZone" label="Zone（主域名）" hide-details></v-text-field>
                 </v-col>
-                <v-col cols="12" sm="6" md="4">
+              </v-row>
+              <v-row align="end">
+                <v-col cols="12" md="4">
                   <v-text-field v-model="settings.cfDdnsRecord" label="记录名（如 node 或 @）" hide-details></v-text-field>
                 </v-col>
                 <v-col cols="12" sm="6" md="4">
-                  <v-btn color="primary" variant="tonal" block @click="issueCert" :loading="certLoading" :disabled="certLoading">
+                  <v-btn color="primary" variant="tonal" block height="40" @click="issueCert" :loading="certLoading" :disabled="certLoading">
                     一键申请证书并绑定
                   </v-btn>
                 </v-col>
@@ -123,6 +124,7 @@
                     color="success"
                     variant="tonal"
                     block
+                    height="40"
                     @click="copyPanelLink"
                     :disabled="!certReady"
                   >
@@ -133,7 +135,7 @@
             </v-card-text>
           </v-card>
 
-          <!-- ② 动态拨号：功能全保留；时刻改为时/分下拉 -->
+          <!-- ② 动态拨号：域名/账号/密码同行；定时组对齐演示 -->
           <v-card variant="outlined" class="sui-block" rounded="lg">
             <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2 text-subtitle-1 font-weight-bold">
               <span>动态拨号</span>
@@ -141,13 +143,15 @@
             </v-card-title>
             <v-card-text>
               <v-alert type="info" variant="tonal" density="compact" class="mb-3">
-                动态拨号：关联域名填 VPS 服务商域名（不是本面板域名）。满 N 天未换 IP 则在设定时刻自动重拨；手动可随时重拨，成功后 5 分钟冷却。成功后刷新 CF DDNS，不重建优选 SNI。
+                关联域名填 VPS 服务商域名（不是本面板域名）。满 N 天未换 IP 则在设定时刻自动重拨；手动可随时重拨，成功后 5 分钟冷却。成功后刷新 CF DDNS，不重建优选 SNI。
               </v-alert>
-              <v-row>
+              <v-row class="mb-1">
                 <v-col cols="12" sm="6" md="4">
                   <v-switch color="primary" v-model="pppoeEnable" label="动态拨号" hide-details />
                 </v-col>
-                <v-col cols="12" sm="6" md="4">
+              </v-row>
+              <v-row>
+                <v-col cols="12" md="4">
                   <v-text-field
                     v-model="settings.pppoeProviderDomain"
                     label="关联域名（服务商域名）"
@@ -155,62 +159,59 @@
                     persistent-hint
                   ></v-text-field>
                 </v-col>
-                <v-col cols="12" sm="6" md="4">
+                <v-col cols="12" md="4">
                   <v-text-field v-model="settings.pppoeAccountId" label="账号 ID" hide-details></v-text-field>
                 </v-col>
-                <v-col cols="12" sm="6" md="4">
+                <v-col cols="12" md="4">
                   <v-text-field v-model="settings.pppoePassword" label="密码" hide-details type="password"></v-text-field>
                 </v-col>
               </v-row>
 
-              <v-sheet class="sui-time-group pa-3 mb-3" rounded="lg" border>
+              <v-sheet class="sui-time-group pa-3 mb-3" rounded="lg">
                 <v-row align="end">
                   <v-col cols="12" md="4">
                     <v-switch color="primary" v-model="pppoeScheduleEnable" label="定时自动重拨" hide-details />
                     <div class="text-caption text-medium-emphasis mt-1">满 N 天未换 IP 才自动跑</div>
                   </v-col>
-                  <v-col cols="12" sm="6" md="3">
+                  <v-col cols="12" sm="4" md="3">
                     <v-text-field
                       v-model="settings.pppoeScheduleDays"
-                      label="周期（天，任意 N）"
+                      label="周期（天）"
                       type="number"
                       min="1"
-                      hint="满 N 天未换 IP 才自动重拨"
-                      persistent-hint
+                      hide-details
                     ></v-text-field>
                   </v-col>
-                  <v-col cols="6" sm="3" md="2">
-                    <v-select
-                      v-model="pppoeScheduleHour"
-                      :items="hourOptions"
-                      label="时"
-                      hide-details
-                    ></v-select>
-                  </v-col>
-                  <v-col cols="6" sm="3" md="2">
-                    <v-select
-                      v-model="pppoeScheduleMinute"
-                      :items="minuteOptions"
-                      label="分"
-                      hide-details
-                    ></v-select>
+                  <v-col cols="12" sm="8" md="5">
+                    <div class="text-caption text-medium-emphasis mb-1">时刻（时 / 分）</div>
+                    <div class="sui-time-pair">
+                      <v-select
+                        v-model="pppoeScheduleHour"
+                        :items="hourOptions"
+                        hide-details
+                        density="comfortable"
+                      ></v-select>
+                      <div class="sui-time-colon">:</div>
+                      <v-select
+                        v-model="pppoeScheduleMinute"
+                        :items="minuteOptions"
+                        hide-details
+                        density="comfortable"
+                      ></v-select>
+                    </div>
                   </v-col>
                 </v-row>
               </v-sheet>
 
-              <v-row>
-                <v-col cols="12" sm="6" md="4">
-                  <v-btn color="warning" variant="tonal" @click="pppoeRedial" :loading="pppoeLoading" :disabled="pppoeLoading">
-                    立即重拨
-                  </v-btn>
-                </v-col>
-                <v-col cols="12" sm="6" md="8" class="d-flex align-center">
-                  <div class="text-medium-emphasis text-body-2">
-                    上次 IP：{{ settings.pppoePrevIp || '—' }}　本次 IP：{{ settings.pppoeLastIp || '—' }}
-                    <template v-if="settings.pppoeLastAt"><br />时间：{{ settings.pppoeLastAt }}</template>
-                  </div>
-                </v-col>
-              </v-row>
+              <div class="d-flex flex-wrap align-center ga-4">
+                <v-btn color="warning" variant="tonal" @click="pppoeRedial" :loading="pppoeLoading" :disabled="pppoeLoading">
+                  立即重拨
+                </v-btn>
+                <div class="text-medium-emphasis text-body-2">
+                  上次 IP：{{ settings.pppoePrevIp || '—' }}　本次 IP：{{ settings.pppoeLastIp || '—' }}
+                  <template v-if="settings.pppoeLastAt">　时间：{{ settings.pppoeLastAt }}</template>
+                </div>
+              </div>
             </v-card-text>
           </v-card>
 
@@ -406,6 +407,11 @@ onMounted(async () => {
   loading.value = true
   await loadData()
   loading.value = false
+  // #region agent log
+  const toolbar = document.querySelector('.sui-settings-toolbar') as HTMLElement | undefined
+  const timePair = document.querySelector('.sui-time-pair') as HTMLElement | undefined
+  fetch('http://127.0.0.1:7611/ingest/dfd3c41e-3d1d-41b7-b746-566bc0e53a83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'28da0c'},body:JSON.stringify({sessionId:'28da0c',runId:'layout-fix',hypothesisId:'H1',location:'Settings.vue:onMounted',message:'settings toolbar/layout presence',data:{hasToolbar:!!toolbar,toolbarDisplay:toolbar?getComputedStyle(toolbar).display:'',hasTimePair:!!timePair,tab:tab.value},timestamp:Date.now()})}).catch(()=>{})
+  // #endregion
 })
 
 const loadData = async () => {
@@ -632,12 +638,51 @@ const stateChange = computed(() => {
   border: 1px solid #e5e9f2;
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06) !important;
 }
+.sui-settings-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px 4px;
+  border-bottom: 1px solid #eef2f7;
+}
+.sui-settings-tabs {
+  flex: 1 1 auto;
+  min-width: 240px;
+}
+.sui-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
 .sui-block {
   background: #fff;
   border-color: #e5e9f2 !important;
 }
 .sui-time-group {
   background: #f8fafc;
-  border-style: dashed !important;
+  border: 1px dashed #dbe3ef !important;
+}
+.sui-time-pair {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+  align-items: center;
+}
+.sui-time-colon {
+  font-weight: 700;
+  color: #64748b;
+  text-align: center;
+}
+@media (max-width: 600px) {
+  .sui-settings-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .sui-settings-actions {
+    justify-content: center;
+  }
 }
 </style>

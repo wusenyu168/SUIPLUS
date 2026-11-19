@@ -15,46 +15,34 @@
     @close="closeStats"
   />
   <v-row>
-    <v-col cols="12" justify="center" align="center">
+    <v-col cols="12" class="d-flex justify-center">
       <v-btn color="primary" @click="showModal(0)">{{ $t('actions.add') }}</v-btn>
     </v-col>
   </v-row>
-  <v-row>
-    <v-col cols="12" sm="4" md="3" lg="2" v-for="(item, index) in <any[]>inbounds" :key="item.tag">
-      <v-card rounded="xl" elevation="5" min-width="200" :title="item.tag">
-        <v-card-subtitle style="margin-top: -15px;">
-          <v-row>
-            <v-col>{{ item.type }}</v-col>
-          </v-row>
-        </v-card-subtitle>
+  <v-row align="stretch">
+    <v-col cols="12" sm="6" md="4" lg="3" v-for="(item, index) in <any[]>inbounds" :key="item.tag">
+      <v-card class="sui-entity-card" rounded="lg" elevation="2" :title="item.tag">
+        <v-card-subtitle>{{ item.type }}</v-card-subtitle>
         <v-card-text>
-          <v-row>
-            <v-col>{{ $t('in.addr') }}</v-col>
-            <v-col>
-              {{ item.listen }}
-            </v-col>
-          </v-row>
-          <v-row v-if="addrRemarks(item).length">
-            <v-col>订阅</v-col>
-            <v-col style="word-break: break-all;">
-              {{ addrRemarks(item).join(' / ') }}
-            </v-col>
-          </v-row>
-          <v-row>
-            <v-col>{{ $t('in.port') }}</v-col>
-            <v-col>
-              {{ item.listen_port }}
-            </v-col>
-          </v-row>
-          <v-row>
-            <v-col>{{ $t('objects.tls') }}</v-col>
-            <v-col>
-              {{ item.tls_id > 0 ? $t('enable') : $t('disable') }}
-            </v-col>
-          </v-row>
-          <v-row>
-            <v-col>{{ $t('pages.clients') }}</v-col>
-            <v-col>
+          <div class="sui-kv-row">
+            <span class="k">{{ $t('in.addr') }}</span>
+            <span class="v" :title="item.listen">{{ item.listen }}</span>
+          </div>
+          <div class="sui-kv-row" v-if="addrRemarks(item).length">
+            <span class="k">订阅</span>
+            <span class="v" :title="addrRemarks(item).join(' / ')">{{ addrRemarks(item).join(' / ') }}</span>
+          </div>
+          <div class="sui-kv-row">
+            <span class="k">{{ $t('in.port') }}</span>
+            <span class="v">{{ item.listen_port }}</span>
+          </div>
+          <div class="sui-kv-row">
+            <span class="k">{{ $t('objects.tls') }}</span>
+            <span class="v">{{ item.tls_id > 0 ? $t('enable') : $t('disable') }}</span>
+          </div>
+          <div class="sui-kv-row">
+            <span class="k">{{ $t('pages.clients') }}</span>
+            <span class="v">
               <template v-if="item.users">
                 <v-tooltip activator="parent" dir="ltr" location="bottom" v-if="item.users.length > 0">
                   <span v-for="u in item.users">{{ u }}<br /></span>
@@ -62,20 +50,20 @@
                 {{ item.users.length }}
               </template>
               <template v-else>-</template>
-            </v-col>
-          </v-row>
-          <v-row>
-            <v-col>{{ $t('online') }}</v-col>
-            <v-col>
+            </span>
+          </div>
+          <div class="sui-kv-row">
+            <span class="k">{{ $t('online') }}</span>
+            <span class="v">
               <template v-if="onlines.includes(item.tag)">
                 <v-chip density="comfortable" size="small" color="success" variant="flat">{{ $t('online') }}</v-chip>
               </template>
               <template v-else>-</template>
-            </v-col>
-          </v-row>
+            </span>
+          </div>
         </v-card-text>
         <v-divider></v-divider>
-        <v-card-actions style="padding: 0;">
+        <v-card-actions>
           <v-btn icon="mdi-file-edit" @click="showModal(item.id)">
             <v-icon />
             <v-tooltip activator="parent" location="top" :text="$t('actions.edit')"></v-tooltip>
@@ -117,7 +105,7 @@ import Data from '@/store/modules/data'
 import InboundVue from '@/layouts/modals/Inbound.vue'
 import Stats from '@/layouts/modals/Stats.vue'
 import { Config } from '@/types/config'
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { createInbound, Inbound } from '@/types/inbounds'
 import RandomUtil from '@/plugins/randomUtil'
 
@@ -207,4 +195,13 @@ const showStats = (tag: string) => {
 const closeStats = () => {
   stats.value.visible = false
 }
+
+// #region agent log
+onMounted(() => {
+  const cards = document.querySelectorAll('.sui-entity-card')
+  const sample = cards[0] as HTMLElement | undefined
+  const actions = sample?.querySelector('.v-card-actions') as HTMLElement | undefined
+  fetch('http://127.0.0.1:7611/ingest/dfd3c41e-3d1d-41b7-b746-566bc0e53a83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'28da0c'},body:JSON.stringify({sessionId:'28da0c',runId:'layout-fix',hypothesisId:'H3',location:'Inbounds.vue:onMounted',message:'inbound card layout metrics',data:{cardCount:cards.length,cardWidth:sample?.offsetWidth||0,actionsJustify:actions?getComputedStyle(actions).justifyContent:'',hasEntityClass:!!sample},timestamp:Date.now()})}).catch(()=>{})
+})
+// #endregion
 </script>

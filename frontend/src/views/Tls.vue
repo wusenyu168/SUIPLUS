@@ -13,9 +13,9 @@
     </v-col>
   </v-row>
   <v-row>
-    <v-col cols="12" sm="4" md="3" lg="2" v-for="(item, index) in <any[]>tlsConfigs" :key="item.id">
-      <v-card rounded="xl" elevation="5" min-width="200" :title="item.name">
-        <v-card-subtitle style="margin-top: -15px;">
+    <v-col cols="12" sm="6" md="4" lg="3" v-for="(item, index) in <any[]>tlsConfigs" :key="item.id">
+      <v-card class="sui-entity-card" rounded="lg" elevation="2" :title="item.name">
+        <v-card-subtitle>
           {{ item.server?.server_name?.length>0 ? item.server.server_name : "-" }}
         </v-card-subtitle>
         <v-card-text>
@@ -51,7 +51,7 @@
           </v-row>
         </v-card-text>
         <v-divider></v-divider>
-        <v-card-actions style="padding: 0;">
+        <v-card-actions>
           <v-btn icon="mdi-file-edit" @click="showModal(item.id)">
             <v-icon />
             <v-tooltip activator="parent" location="top" :text="$t('actions.edit')"></v-tooltip>
