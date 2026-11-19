@@ -595,9 +595,6 @@ const pppoeRedial = async () => {
   if (pppoeLoading.value || cooldownLeft.value > 0) return
   await HttpUtils.post('api/save', { object: 'settings', action: 'set', data: JSON.stringify(settings.value) })
   pppoeLoading.value = true
-  // #region agent log
-  fetch('http://127.0.0.1:7611/ingest/dfd3c41e-3d1d-41b7-b746-566bc0e53a83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'28da0c'},body:JSON.stringify({sessionId:'28da0c',runId:'pppoe-argo',hypothesisId:'H1',location:'Settings.vue:pppoeRedial',message:'redial start',data:{hasPrev:!!settings.value.pppoePrevIp,hasLast:!!settings.value.pppoeLastIp},timestamp:Date.now()})}).catch(()=>{})
-  // #endregion
   const msg = await HttpUtils.post('api/pppoeRedial', {})
   const obj = (msg.obj || {}) as Record<string, string>
   applyPppoeFields(obj)
@@ -617,9 +614,6 @@ const pppoeRedial = async () => {
       message: (msg.msg || '').replace(/^pppoeRedial:\s*/i, '') || '重拨失败；若已断网，恢复后请点「获取 IP」'
     })
   }
-  // #region agent log
-  fetch('http://127.0.0.1:7611/ingest/dfd3c41e-3d1d-41b7-b746-566bc0e53a83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'28da0c'},body:JSON.stringify({sessionId:'28da0c',runId:'pppoe-argo',hypothesisId:'H1',location:'Settings.vue:pppoeRedial:done',message:'redial done',data:{ok:!!msg.success,prev:settings.value.pppoePrevIp||'',last:settings.value.pppoeLastIp||'',pending:settings.value.pppoePending},timestamp:Date.now()})}).catch(()=>{})
-  // #endregion
   pppoeLoading.value = false
 }
 
@@ -630,9 +624,6 @@ const pppoeShowIp = async () => {
   const msg = await HttpUtils.post('api/pppoeShowIp', {})
   const obj = (msg.obj || {}) as Record<string, string>
   applyPppoeFields(obj)
-  // #region agent log
-  fetch('http://127.0.0.1:7611/ingest/dfd3c41e-3d1d-41b7-b746-566bc0e53a83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'28da0c'},body:JSON.stringify({sessionId:'28da0c',runId:'pppoe-argo',hypothesisId:'H2',location:'Settings.vue:pppoeShowIp',message:'showip result',data:{ok:!!msg.success,prev:obj.pppoePrevIp||'',last:obj.pppoeLastIp||''},timestamp:Date.now()})}).catch(()=>{})
-  // #endregion
   if (msg.success) {
     push.success({
       title: i18n.global.t('success'),
@@ -657,9 +648,6 @@ const argoRebuild = async () => {
   const msg = await HttpUtils.post('api/argoRebuild', {})
   const obj = (msg.obj || {}) as Record<string, string>
   applyPppoeFields(obj)
-  // #region agent log
-  fetch('http://127.0.0.1:7611/ingest/dfd3c41e-3d1d-41b7-b746-566bc0e53a83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'28da0c'},body:JSON.stringify({sessionId:'28da0c',runId:'pppoe-argo',hypothesisId:'H3',location:'Settings.vue:argoRebuild',message:'argo rebuild',data:{ok:!!msg.success,domain:obj.argoDomain||''},timestamp:Date.now()})}).catch(()=>{})
-  // #endregion
   if (msg.success) {
     push.success({
       title: i18n.global.t('success'),
