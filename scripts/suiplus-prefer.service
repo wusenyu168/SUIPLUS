@@ -8,6 +8,8 @@ Type=oneshot
 # Do not SIGTERM cloudflared/router started by sync_prefer when this unit exits.
 KillMode=process
 ExecStart=/usr/bin/python3 /usr/local/s-ui/scripts/suiplus_sync_prefer.py
+# Auto rebuild only when argoAutoRebuild=true and tunnel unhealthy (default off).
+ExecStartPost=/usr/bin/python3 /usr/local/s-ui/scripts/suiplus_argo_health.py --auto
 Nice=10
 
 [Install]

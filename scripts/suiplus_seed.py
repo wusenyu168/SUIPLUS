@@ -529,6 +529,12 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
         "pppoeLastAt": "",
         "pppoeLastSuccessTs": "",
         "pppoeLastAutoFireDate": "",
+        "pppoePending": "false",
+        "argoAutoRebuild": "false",
+        "argoRebuildCooldownSec": "1800",
+        "argoLastRebuildTs": "",
+        "argoLastRebuildAt": "",
+        "argoDomain": "",
     }.items():
         upsert_setting(cur, k, v)
 

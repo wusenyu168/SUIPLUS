@@ -215,6 +215,63 @@ def cooldown_block(s: dict[str, str]) -> str | None:
     return None
 
 
+def do_showip(s: dict[str, str]) -> int:
+    """Fetch current provider IP; update last/prev when changed."""
+    aid = (s.get("pppoeAccountId") or "").strip()
+    pw = (s.get("pppoePassword") or "").strip()
+    if not aid or not pw:
+        return fail("请先填写账号 ID 和密码并保存")
+    if s.get("pppoeEnable", "false").lower() not in ("true", "1", "yes"):
+        return fail("动态拨号未启用")
+
+    prev = (s.get("pppoePrevIp") or "").strip()
+    last = (s.get("pppoeLastIp") or "").strip()
+    check = show_ip(aid, pw, timeout=TIMEOUT)
+    if check.get("status") != "success":
+        msg = _sanitize_msg(str(check.get("msg") or "获取 IP 失败"))
+        return fail(msg, pppoePrevIp=prev, pppoeLastIp=last, transient=bool(check.get("transient")))
+
+    cur = str(check.get("ip") or "").strip()
+    if not cur:
+        return fail("获取 IP 为空", pppoePrevIp=prev, pppoeLastIp=last)
+
+    now_ts = int(time.time())
+    now = datetime.fromtimestamp(now_ts).strftime("%Y-%m-%d %H:%M:%S")
+    kv: dict[str, str] = {"pppoeLastAt": now, "pppoePending": "false"}
+    changed = bool(last and cur != last)
+    if changed:
+        kv["pppoePrevIp"] = last
+        kv["pppoeLastIp"] = cur
+        kv["pppoeLastSuccessTs"] = str(now_ts)
+        prev, last = last, cur
+        log(f"showip changed {prev} -> {last}; refreshing DDNS")
+        upsert_settings(DB, kv)
+        try:
+            run_ddns()
+        except Exception as e:
+            log(f"ddns after showip: {e}")
+        msg = f"IP 已更新 {prev} → {last}"
+    else:
+        if not last:
+            kv["pppoeLastIp"] = cur
+            last = cur
+        upsert_settings(DB, kv)
+        msg = f"当前 IP {cur}" + ("（未变化）" if last == cur and prev else "")
+
+    out = {
+        "ok": True,
+        "msg": msg,
+        "changed": changed,
+        "pppoePrevIp": prev or (s.get("pppoePrevIp") or ""),
+        "pppoeLastIp": last or cur,
+        "pppoeLastAt": now,
+        "pppoeLastSuccessTs": kv.get("pppoeLastSuccessTs") or (s.get("pppoeLastSuccessTs") or ""),
+        "pppoePending": "false",
+    }
+    print(json.dumps(out, ensure_ascii=False))
+    return 0
+
+
 def do_redial(s: dict[str, str], *, auto: bool) -> int:
     aid = (s.get("pppoeAccountId") or "").strip()
     pw = (s.get("pppoePassword") or "").strip()
@@ -234,10 +291,20 @@ def do_redial(s: dict[str, str], *, auto: bool) -> int:
     else:
         old_ip = (s.get("pppoeLastIp") or "").strip()
 
+    # Lock previous IP before changeip (survive panel disconnect)
+    if old_ip:
+        upsert_settings(
+            DB,
+            {
+                "pppoePrevIp": old_ip,
+                "pppoePending": "true",
+            },
+        )
+
     result = change_ip(aid, pw)
     if result.get("status") != "success":
         msg = _sanitize_msg(str(result.get("msg") or "重拨失败"))
-        return fail(msg, prev_ip=old_ip)
+        return fail(msg, pppoePrevIp=old_ip, pppoeLastIp=(s.get("pppoeLastIp") or old_ip), pppoePending="true")
 
     new_ip = ""
     deadline = time.time() + IP_WAIT_SEC
@@ -257,10 +324,18 @@ def do_redial(s: dict[str, str], *, auto: bool) -> int:
     if not new_ip:
         new_ip = str(result.get("ip") or "").strip()
     if not new_ip:
+        upsert_settings(
+            DB,
+            {
+                "pppoePrevIp": old_ip,
+                "pppoePending": "true",
+            },
+        )
         return fail(
-            "重拨已提交但未检测到新 IP，请稍后点「立即重拨」或手动刷新 DDNS",
-            prev_ip=old_ip,
-            last_ip=old_ip,
+            "重拨已提交但未检测到新 IP（换线断网正常）。网络恢复后请点「获取 IP」",
+            pppoePrevIp=old_ip,
+            pppoeLastIp=(s.get("pppoeLastIp") or old_ip),
+            pppoePending="true",
         )
 
     now_ts = int(time.time())
@@ -270,6 +345,7 @@ def do_redial(s: dict[str, str], *, auto: bool) -> int:
         "pppoeLastIp": new_ip,
         "pppoeLastAt": now,
         "pppoeLastSuccessTs": str(now_ts),
+        "pppoePending": "false",
     }
     if auto:
         kv["pppoeLastAutoFireDate"] = datetime.now().strftime("%Y-%m-%d")
@@ -290,6 +366,7 @@ def do_redial(s: dict[str, str], *, auto: bool) -> int:
         "pppoeLastIp": new_ip,
         "pppoeLastAt": now,
         "pppoeLastSuccessTs": str(now_ts),
+        "pppoePending": "false",
     }
     print(json.dumps(out, ensure_ascii=False))
     return 0
@@ -302,12 +379,19 @@ def main() -> int:
         action="store_true",
         help="Scheduled run: honor N-day cycle + HH:MM; skip quietly when not due",
     )
+    parser.add_argument(
+        "--showip",
+        action="store_true",
+        help="Only fetch current IP (for panel after network recovers)",
+    )
     args = parser.parse_args()
 
     if not Path(DB).is_file():
         return fail("no db")
 
     s = settings(DB)
+    if args.showip:
+        return do_showip(s)
     if args.auto:
         reason = maybe_skip_auto(s)
         if reason:

@@ -381,17 +381,7 @@ func (a *ApiService) IssueCert(c *gin.Context) {
 	jsonMsgObj(c, "issueCert", result, nil)
 }
 
-func (a *ApiService) PppoeRedial(c *gin.Context) {
-	script := "/usr/local/s-ui/scripts/suiplus_pppoe_redial.py"
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "python3", script).CombinedOutput()
-	text := strings.TrimSpace(string(out))
-	if ctx.Err() == context.DeadlineExceeded {
-		jsonMsg(c, "pppoeRedial", common.NewError("重拨超时，请稍后查看日志 /var/log/suiplus-pppoe.log"))
-		return
-	}
-	// Script prints a final JSON line with ok/msg/ips
+func parseScriptJSON(text string) map[string]interface{} {
 	var payload map[string]interface{}
 	for _, line := range strings.Split(text, "\n") {
 		line = strings.TrimSpace(line)
@@ -399,25 +389,15 @@ func (a *ApiService) PppoeRedial(c *gin.Context) {
 			_ = json.Unmarshal([]byte(line), &payload)
 		}
 	}
-	if payload == nil {
-		if err != nil {
-			jsonMsg(c, "pppoeRedial", common.NewError(text, " | ", err.Error()))
-			return
-		}
-		jsonMsg(c, "pppoeRedial", common.NewError(text))
-		return
-	}
-	ok, _ := payload["ok"].(bool)
-	msg, _ := payload["msg"].(string)
-	if !ok {
-		if msg == "" {
-			msg = "重拨失败"
-		}
-		jsonMsg(c, "pppoeRedial", common.NewError(msg))
-		return
-	}
+	return payload
+}
+
+func pppoeResultFromPayload(payload map[string]interface{}, msg string) map[string]string {
 	result := map[string]string{}
-	for _, k := range []string{"pppoePrevIp", "pppoeLastIp", "pppoeLastAt", "prev_ip", "last_ip", "last_at"} {
+	for _, k := range []string{
+		"pppoePrevIp", "pppoeLastIp", "pppoeLastAt", "pppoeLastSuccessTs", "pppoePending",
+		"prev_ip", "last_ip", "last_at", "argoDomain", "argoLastRebuildTs",
+	} {
 		if v, ok := payload[k].(string); ok {
 			result[k] = v
 		}
@@ -434,7 +414,103 @@ func (a *ApiService) PppoeRedial(c *gin.Context) {
 	if msg != "" {
 		result["message"] = msg
 	}
-	// Empty msg avoids i18n actions.* toast; frontend shows message.
+	return result
+}
+
+func (a *ApiService) PppoeRedial(c *gin.Context) {
+	script := "/usr/local/s-ui/scripts/suiplus_pppoe_redial.py"
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "python3", script).CombinedOutput()
+	text := strings.TrimSpace(string(out))
+	if ctx.Err() == context.DeadlineExceeded {
+		jsonMsg(c, "pppoeRedial", common.NewError("重拨超时，请稍后点「获取 IP」或查看 /var/log/suiplus-pppoe.log"))
+		return
+	}
+	payload := parseScriptJSON(text)
+	if payload == nil {
+		if err != nil {
+			jsonMsg(c, "pppoeRedial", common.NewError(text, " | ", err.Error()))
+			return
+		}
+		jsonMsg(c, "pppoeRedial", common.NewError(text))
+		return
+	}
+	ok, _ := payload["ok"].(bool)
+	msg, _ := payload["msg"].(string)
+	result := pppoeResultFromPayload(payload, msg)
+	if !ok {
+		if msg == "" {
+			msg = "重拨失败"
+		}
+		// Still return partial IPs so UI can refresh prev/pending
+		jsonMsgObj(c, "pppoeRedial", result, common.NewError(msg))
+		return
+	}
+	jsonObj(c, result, nil)
+}
+
+func (a *ApiService) PppoeShowIp(c *gin.Context) {
+	script := "/usr/local/s-ui/scripts/suiplus_pppoe_redial.py"
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "python3", script, "--showip").CombinedOutput()
+	text := strings.TrimSpace(string(out))
+	if ctx.Err() == context.DeadlineExceeded {
+		jsonMsg(c, "pppoeShowIp", common.NewError("获取 IP 超时，请稍后重试"))
+		return
+	}
+	payload := parseScriptJSON(text)
+	if payload == nil {
+		if err != nil {
+			jsonMsg(c, "pppoeShowIp", common.NewError(text, " | ", err.Error()))
+			return
+		}
+		jsonMsg(c, "pppoeShowIp", common.NewError(text))
+		return
+	}
+	ok, _ := payload["ok"].(bool)
+	msg, _ := payload["msg"].(string)
+	result := pppoeResultFromPayload(payload, msg)
+	if !ok {
+		if msg == "" {
+			msg = "获取 IP 失败"
+		}
+		jsonMsgObj(c, "pppoeShowIp", result, common.NewError(msg))
+		return
+	}
+	jsonObj(c, result, nil)
+}
+
+func (a *ApiService) ArgoRebuild(c *gin.Context) {
+	script := "/usr/local/s-ui/scripts/suiplus_argo_health.py"
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "python3", script, "--force").CombinedOutput()
+	text := strings.TrimSpace(string(out))
+	if ctx.Err() == context.DeadlineExceeded {
+		jsonMsg(c, "argoRebuild", common.NewError("重建超时，请查看 /var/log/suiplus-argo-health.log"))
+		return
+	}
+	payload := parseScriptJSON(text)
+	if payload == nil {
+		if err != nil {
+			jsonMsg(c, "argoRebuild", common.NewError(text, " | ", err.Error()))
+			return
+		}
+		jsonMsg(c, "argoRebuild", common.NewError(text))
+		return
+	}
+	ok, _ := payload["ok"].(bool)
+	msg, _ := payload["msg"].(string)
+	result := pppoeResultFromPayload(payload, msg)
+	if !ok {
+		if msg == "" {
+			msg = "Argo 重建失败"
+		}
+		jsonMsg(c, "argoRebuild", common.NewError(msg))
+		return
+	}
 	jsonObj(c, result, nil)
 }
 

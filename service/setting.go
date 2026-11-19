@@ -76,6 +76,11 @@ var defaultValueMap = map[string]string{
 	"cfDdnsProxied":  "false", // deprecated UI; DDNS always writes proxied=false
 	// Prefer / Argo — synced separately from DDNS timer
 	"suiplusPreferEnable": "false",
+	"argoAutoRebuild":     "false", // default off; timer may FORCE only when on + unhealthy
+	"argoRebuildCooldownSec": "1800",  // 30 minutes
+	"argoLastRebuildTs":   "",
+	"argoLastRebuildAt":   "",
+	"argoDomain":          "",
 	// Dynamic redial (VPS provider account — not panel webDomain)
 	"pppoeEnable":            "false",
 	"pppoeProviderDomain":    "",
@@ -89,6 +94,7 @@ var defaultValueMap = map[string]string{
 	"pppoeLastAt":            "",
 	"pppoeLastSuccessTs":     "",
 	"pppoeLastAutoFireDate":  "",
+	"pppoePending":           "false",
 }
 
 type SettingService struct {

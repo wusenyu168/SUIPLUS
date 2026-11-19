@@ -74,7 +74,7 @@
         </v-window-item>
 
         <v-window-item value="t5">
-          <!-- ① 隧道与域名：栅格对齐演示稿 -->
+          <!-- ① 隧道与域名 -->
           <v-card variant="outlined" class="sui-block mb-4" rounded="lg">
             <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2 text-subtitle-1 font-weight-bold">
               <span>隧道与域名</span>
@@ -82,14 +82,18 @@
             </v-card-title>
             <v-card-text>
               <v-alert type="info" variant="tonal" density="compact" class="mb-3">
-                先在「界面」填写本机域名并保存；再开启优选。优选/Argo 与 DDNS 已分离。节点域名固定 DNS-only（灰云）。未绑域名时订阅仅公网 IP。
+                先在「界面」填写本机域名并保存；再开启优选。优选/Argo 与 DDNS 已分离。节点域名固定 DNS-only（灰云）。重建 Argo 会换新 SNI，客户端需重新订阅优选。
               </v-alert>
               <v-row class="mb-1">
-                <v-col cols="12" sm="6">
+                <v-col cols="12" sm="6" md="4">
                   <v-switch color="primary" v-model="suiplusPreferEnable" label="Argo默认+优选" hide-details />
                 </v-col>
-                <v-col cols="12" sm="6">
+                <v-col cols="12" sm="6" md="4">
                   <v-switch color="primary" v-model="cfDdnsEnable" label="Cloudflare DDNS" hide-details />
+                </v-col>
+                <v-col cols="12" sm="6" md="4">
+                  <v-switch color="primary" v-model="argoAutoRebuild" label="Argo异常自动重建" hide-details />
+                  <div class="text-caption text-medium-emphasis mt-1">默认关；挂了才强建，冷却 30 分钟</div>
                 </v-col>
               </v-row>
               <v-row>
@@ -111,31 +115,33 @@
                 </v-col>
               </v-row>
               <v-row align="end">
-                <v-col cols="12" md="4">
+                <v-col cols="12" md="3">
                   <v-text-field v-model="settings.cfDdnsRecord" label="记录名（如 node 或 @）" hide-details></v-text-field>
                 </v-col>
-                <v-col cols="12" sm="6" md="4">
+                <v-col cols="12" sm="6" md="3">
                   <v-btn color="primary" variant="tonal" block height="40" @click="issueCert" :loading="certLoading" :disabled="certLoading">
                     一键申请证书并绑定
                   </v-btn>
                 </v-col>
-                <v-col cols="12" sm="6" md="4">
-                  <v-btn
-                    color="success"
-                    variant="tonal"
-                    block
-                    height="40"
-                    @click="copyPanelLink"
-                    :disabled="!certReady"
-                  >
+                <v-col cols="12" sm="6" md="3">
+                  <v-btn color="success" variant="tonal" block height="40" @click="copyPanelLink" :disabled="!certReady">
                     复制面板链接
                   </v-btn>
                 </v-col>
+                <v-col cols="12" sm="6" md="3">
+                  <v-btn color="warning" variant="tonal" block height="40" @click="argoRebuild" :loading="argoLoading" :disabled="argoLoading || !suiplusPreferEnable">
+                    立即重建 Argo
+                  </v-btn>
+                </v-col>
               </v-row>
+              <div class="text-caption text-medium-emphasis mt-2" v-if="settings.argoDomain || settings.argoLastRebuildAt">
+                <span v-if="settings.argoDomain">当前 Argo：{{ settings.argoDomain }}</span>
+                <span v-if="settings.argoLastRebuildAt">　上次重建：{{ settings.argoLastRebuildAt }}</span>
+              </div>
             </v-card-text>
           </v-card>
 
-          <!-- ② 动态拨号：域名/账号/密码同行；定时组对齐演示 -->
+          <!-- ② 动态拨号 -->
           <v-card variant="outlined" class="sui-block" rounded="lg">
             <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2 text-subtitle-1 font-weight-bold">
               <span>动态拨号</span>
@@ -143,7 +149,7 @@
             </v-card-title>
             <v-card-text>
               <v-alert type="info" variant="tonal" density="compact" class="mb-3">
-                关联域名填 VPS 服务商域名（不是本面板域名）。满 N 天未换 IP 则在设定时刻自动重拨；手动可随时重拨，成功后 5 分钟冷却。成功后刷新 CF DDNS，不重建优选 SNI。
+                换线时短暂断网正常。恢复后点「获取 IP」确认；成功换 IP 后 5 分钟冷却。重拨只刷 DDNS，不重建 Argo。
               </v-alert>
               <v-row class="mb-1">
                 <v-col cols="12" sm="6" md="4">
@@ -185,38 +191,49 @@
                   <v-col cols="12" sm="8" md="5">
                     <div class="text-caption text-medium-emphasis mb-1">时刻（时 / 分）</div>
                     <div class="sui-time-pair">
-                      <v-select
-                        v-model="pppoeScheduleHour"
-                        :items="hourOptions"
-                        hide-details
-                        density="comfortable"
-                      ></v-select>
+                      <v-select v-model="pppoeScheduleHour" :items="hourOptions" hide-details density="comfortable"></v-select>
                       <div class="sui-time-colon">:</div>
-                      <v-select
-                        v-model="pppoeScheduleMinute"
-                        :items="minuteOptions"
-                        hide-details
-                        density="comfortable"
-                      ></v-select>
+                      <v-select v-model="pppoeScheduleMinute" :items="minuteOptions" hide-details density="comfortable"></v-select>
                     </div>
                   </v-col>
                 </v-row>
               </v-sheet>
 
-              <div class="d-flex flex-wrap align-center ga-4">
-                <v-btn color="warning" variant="tonal" @click="pppoeRedial" :loading="pppoeLoading" :disabled="pppoeLoading">
+              <v-sheet class="sui-ip-panel pa-3 mb-3" rounded="lg">
+                <v-row dense>
+                  <v-col cols="12" sm="4">
+                    <div class="text-caption text-medium-emphasis">上次 IP</div>
+                    <div class="text-body-1 font-weight-medium">{{ settings.pppoePrevIp || '—' }}</div>
+                  </v-col>
+                  <v-col cols="12" sm="4">
+                    <div class="text-caption text-medium-emphasis">本次 IP</div>
+                    <div class="text-body-1 font-weight-bold">{{ settings.pppoeLastIp || '—' }}</div>
+                  </v-col>
+                  <v-col cols="12" sm="4">
+                    <div class="text-caption text-medium-emphasis">冷却 / 状态</div>
+                    <div class="text-body-2" :class="cooldownLeft > 0 ? 'text-warning' : 'text-medium-emphasis'">
+                      <template v-if="cooldownLeft > 0">可再拨倒计时 {{ cooldownText }}</template>
+                      <template v-else-if="settings.pppoePending === 'true'">待确认 · 请点获取 IP</template>
+                      <template v-else-if="settings.pppoeLastAt">时间 {{ settings.pppoeLastAt }}</template>
+                      <template v-else>可立即重拨</template>
+                    </div>
+                  </v-col>
+                </v-row>
+              </v-sheet>
+
+              <div class="d-flex flex-wrap align-center ga-3">
+                <v-btn color="warning" variant="tonal" @click="pppoeRedial" :loading="pppoeLoading" :disabled="pppoeLoading || cooldownLeft > 0">
                   立即重拨
                 </v-btn>
-                <div class="text-medium-emphasis text-body-2">
-                  上次 IP：{{ settings.pppoePrevIp || '—' }}　本次 IP：{{ settings.pppoeLastIp || '—' }}
-                  <template v-if="settings.pppoeLastAt">　时间：{{ settings.pppoeLastAt }}</template>
-                </div>
+                <v-btn color="primary" variant="tonal" @click="pppoeShowIp" :loading="pppoeShowLoading" :disabled="pppoeShowLoading || !pppoeEnable">
+                  获取 IP
+                </v-btn>
               </div>
             </v-card-text>
           </v-card>
 
           <v-alert class="mt-4" type="info" variant="tonal" density="compact">
-            记录名只填主机名（如 node），Zone 填主域。节点域名固定灰云。动态拨号请先保存；手动成功后 5 分钟内不可再拨。
+            记录名只填主机名；动态拨号请先保存。重建 Argo 后请重新订阅优选节点。
           </v-alert>
         </v-window-item>
 
@@ -288,7 +305,7 @@
 
 <script lang="ts" setup>
 import { i18n } from '@/locales'
-import { Ref, computed, inject, onMounted, ref } from 'vue'
+import { Ref, computed, inject, onMounted, onUnmounted, ref } from 'vue'
 import HttpUtils from '@/plugins/httputil'
 import { FindDiff } from '@/plugins/utils'
 import SubJsonExtVue from '@/components/SubJsonExt.vue'
@@ -328,6 +345,11 @@ const settings = ref({
   cfDdnsInterval: "300",
   cfDdnsProxied: "false",
   suiplusPreferEnable: "false",
+  argoAutoRebuild: "false",
+  argoRebuildCooldownSec: "1800",
+  argoLastRebuildTs: "",
+  argoLastRebuildAt: "",
+  argoDomain: "",
   pppoeEnable: "false",
   pppoeProviderDomain: "",
   pppoeAccountId: "",
@@ -340,9 +362,24 @@ const settings = ref({
   pppoeLastAt: "",
   pppoeLastSuccessTs: "",
   pppoeLastAutoFireDate: "",
+  pppoePending: "false",
 })
 const certLoading = ref(false)
 const pppoeLoading = ref(false)
+const pppoeShowLoading = ref(false)
+const argoLoading = ref(false)
+const nowTick = ref(Date.now())
+let cooldownTimer: ReturnType<typeof setInterval> | null = null
+const COOLDOWN_SEC = 300
+
+const applyPppoeFields = (obj: Record<string, string>) => {
+  if (!obj) return
+  for (const k of ['pppoePrevIp', 'pppoeLastIp', 'pppoeLastAt', 'pppoeLastSuccessTs', 'pppoePending', 'argoDomain', 'argoLastRebuildTs', 'argoLastRebuildAt'] as const) {
+    if (obj[k] != null && obj[k] !== '') (settings.value as any)[k] = obj[k]
+  }
+  if (obj.pppoePending === 'true' || obj.pppoePending === 'false') settings.value.pppoePending = obj.pppoePending
+  oldSettings.value = { ...settings.value }
+}
 
 const pad2 = (n: number) => n.toString().padStart(2, '0')
 const hourOptions = Array.from({ length: 24 }, (_, i) => pad2(i))
@@ -407,6 +444,29 @@ onMounted(async () => {
   loading.value = true
   await loadData()
   loading.value = false
+  cooldownTimer = setInterval(() => { nowTick.value = Date.now() }, 1000)
+})
+
+onUnmounted(() => {
+  if (cooldownTimer) clearInterval(cooldownTimer)
+  cooldownTimer = null
+})
+
+const cooldownLeft = computed(() => {
+  void nowTick.value
+  const raw = (settings.value.pppoeLastSuccessTs || '').trim()
+  if (!raw) return 0
+  const ts = parseInt(raw, 10)
+  if (!ts) return 0
+  const left = COOLDOWN_SEC - Math.floor(Date.now() / 1000 - ts)
+  return left > 0 ? left : 0
+})
+
+const cooldownText = computed(() => {
+  const s = cooldownLeft.value
+  const m = Math.floor(s / 60)
+  const r = s % 60
+  return `${m}:${r.toString().padStart(2, '0')}`
 })
 
 const loadData = async () => {
@@ -489,6 +549,11 @@ const suiplusPreferEnable = computed({
   set: (v:boolean) => { settings.value.suiplusPreferEnable = v ? "true" : "false" }
 })
 
+const argoAutoRebuild = computed({
+  get: () => { return settings.value.argoAutoRebuild == "true" },
+  set: (v:boolean) => { settings.value.argoAutoRebuild = v ? "true" : "false" }
+})
+
 const pppoeEnable = computed({
   get: () => { return settings.value.pppoeEnable == "true" },
   set: (v:boolean) => { settings.value.pppoeEnable = v ? "true" : "false" }
@@ -527,17 +592,16 @@ const deriveDomainFromDdns = () => {
 }
 
 const pppoeRedial = async () => {
-  if (pppoeLoading.value) return
-  // Persist credentials first
+  if (pppoeLoading.value || cooldownLeft.value > 0) return
   await HttpUtils.post('api/save', { object: 'settings', action: 'set', data: JSON.stringify(settings.value) })
   pppoeLoading.value = true
+  // #region agent log
+  fetch('http://127.0.0.1:7611/ingest/dfd3c41e-3d1d-41b7-b746-566bc0e53a83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'28da0c'},body:JSON.stringify({sessionId:'28da0c',runId:'pppoe-argo',hypothesisId:'H1',location:'Settings.vue:pppoeRedial',message:'redial start',data:{hasPrev:!!settings.value.pppoePrevIp,hasLast:!!settings.value.pppoeLastIp},timestamp:Date.now()})}).catch(()=>{})
+  // #endregion
   const msg = await HttpUtils.post('api/pppoeRedial', {})
+  const obj = (msg.obj || {}) as Record<string, string>
+  applyPppoeFields(obj)
   if (msg.success) {
-    const obj = (msg.obj || {}) as Record<string, string>
-    if (obj.pppoePrevIp != null) settings.value.pppoePrevIp = obj.pppoePrevIp
-    if (obj.pppoeLastIp != null) settings.value.pppoeLastIp = obj.pppoeLastIp
-    if (obj.pppoeLastAt != null) settings.value.pppoeLastAt = obj.pppoeLastAt
-    oldSettings.value = { ...settings.value }
     push.success({
       title: i18n.global.t('success'),
       duration: 8000,
@@ -545,13 +609,72 @@ const pppoeRedial = async () => {
     })
     await loadData()
   } else {
+    // Network drop / pending: keep any prev IP from obj; tip to 获取 IP
+    if (obj.pppoePrevIp || obj.pppoePending === 'true') applyPppoeFields(obj)
+    push.error({
+      title: i18n.global.t('error'),
+      duration: 12000,
+      message: (msg.msg || '').replace(/^pppoeRedial:\s*/i, '') || '重拨失败；若已断网，恢复后请点「获取 IP」'
+    })
+  }
+  // #region agent log
+  fetch('http://127.0.0.1:7611/ingest/dfd3c41e-3d1d-41b7-b746-566bc0e53a83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'28da0c'},body:JSON.stringify({sessionId:'28da0c',runId:'pppoe-argo',hypothesisId:'H1',location:'Settings.vue:pppoeRedial:done',message:'redial done',data:{ok:!!msg.success,prev:settings.value.pppoePrevIp||'',last:settings.value.pppoeLastIp||'',pending:settings.value.pppoePending},timestamp:Date.now()})}).catch(()=>{})
+  // #endregion
+  pppoeLoading.value = false
+}
+
+const pppoeShowIp = async () => {
+  if (pppoeShowLoading.value || !pppoeEnable.value) return
+  await HttpUtils.post('api/save', { object: 'settings', action: 'set', data: JSON.stringify(settings.value) })
+  pppoeShowLoading.value = true
+  const msg = await HttpUtils.post('api/pppoeShowIp', {})
+  const obj = (msg.obj || {}) as Record<string, string>
+  applyPppoeFields(obj)
+  // #region agent log
+  fetch('http://127.0.0.1:7611/ingest/dfd3c41e-3d1d-41b7-b746-566bc0e53a83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'28da0c'},body:JSON.stringify({sessionId:'28da0c',runId:'pppoe-argo',hypothesisId:'H2',location:'Settings.vue:pppoeShowIp',message:'showip result',data:{ok:!!msg.success,prev:obj.pppoePrevIp||'',last:obj.pppoeLastIp||''},timestamp:Date.now()})}).catch(()=>{})
+  // #endregion
+  if (msg.success) {
+    push.success({
+      title: i18n.global.t('success'),
+      duration: 6000,
+      message: obj.message || msg.msg || '已获取 IP'
+    })
+    await loadData()
+  } else {
     push.error({
       title: i18n.global.t('error'),
       duration: 10000,
-      message: (msg.msg || '').replace(/^pppoeRedial:\s*/i, '') || '重拨失败'
+      message: (msg.msg || '').replace(/^pppoeShowIp:\s*/i, '') || '获取 IP 失败'
     })
   }
-  pppoeLoading.value = false
+  pppoeShowLoading.value = false
+}
+
+const argoRebuild = async () => {
+  if (argoLoading.value || !suiplusPreferEnable.value) return
+  await HttpUtils.post('api/save', { object: 'settings', action: 'set', data: JSON.stringify(settings.value) })
+  argoLoading.value = true
+  const msg = await HttpUtils.post('api/argoRebuild', {})
+  const obj = (msg.obj || {}) as Record<string, string>
+  applyPppoeFields(obj)
+  // #region agent log
+  fetch('http://127.0.0.1:7611/ingest/dfd3c41e-3d1d-41b7-b746-566bc0e53a83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'28da0c'},body:JSON.stringify({sessionId:'28da0c',runId:'pppoe-argo',hypothesisId:'H3',location:'Settings.vue:argoRebuild',message:'argo rebuild',data:{ok:!!msg.success,domain:obj.argoDomain||''},timestamp:Date.now()})}).catch(()=>{})
+  // #endregion
+  if (msg.success) {
+    push.success({
+      title: i18n.global.t('success'),
+      duration: 10000,
+      message: obj.message || msg.msg || 'Argo 已重建，请重新订阅优选节点'
+    })
+    await loadData()
+  } else {
+    push.error({
+      title: i18n.global.t('error'),
+      duration: 12000,
+      message: (msg.msg || '').replace(/^argoRebuild:\s*/i, '') || 'Argo 重建失败'
+    })
+  }
+  argoLoading.value = false
 }
 
 const issueCert = async () => {
@@ -670,6 +793,10 @@ const stateChange = computed(() => {
   font-weight: 700;
   color: #64748b;
   text-align: center;
+}
+.sui-ip-panel {
+  background: #f8fafc;
+  border: 1px solid #e5e9f2;
 }
 @media (max-width: 600px) {
   .sui-settings-toolbar {

@@ -50,6 +50,10 @@ func (a *APIHandler) postHandler(c *gin.Context) {
 		a.ApiService.IssueCert(c)
 	case "pppoeRedial":
 		a.ApiService.PppoeRedial(c)
+	case "pppoeShowIp":
+		a.ApiService.PppoeShowIp(c)
+	case "argoRebuild":
+		a.ApiService.ArgoRebuild(c)
 	case "linkConvert":
 		a.ApiService.LinkConvert(c)
 	case "subConvert":
