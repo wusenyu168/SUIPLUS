@@ -149,7 +149,7 @@
             </v-card-title>
             <v-card-text>
               <v-alert type="info" variant="tonal" density="compact" class="mb-3">
-                换线时短暂断网正常。恢复后点「获取 IP」确认；成功换 IP 后 5 分钟冷却。重拨只刷 DDNS，不重建 Argo。
+                换线时短暂断网正常；恢复后自动或点「获取 IP」。定时时刻按面板「时区」计算。会话 72 小时；手动重拨另有 5 分钟冷却。重拨只刷 DDNS，不重建 Argo。
               </v-alert>
               <v-row class="mb-1">
                 <v-col cols="12" sm="6" md="4">
@@ -177,7 +177,7 @@
                 <v-row align="end">
                   <v-col cols="12" md="4">
                     <v-switch color="primary" v-model="pppoeScheduleEnable" label="定时自动重拨" hide-details />
-                    <div class="text-caption text-medium-emphasis mt-1">满 N 天未换 IP 才自动跑</div>
+                    <div class="text-caption text-medium-emphasis mt-1">满 N 天未换 IP 才自动跑（时刻用面板时区）</div>
                   </v-col>
                   <v-col cols="12" sm="4" md="3">
                     <v-text-field
@@ -211,11 +211,13 @@
                   </v-col>
                   <v-col cols="12" sm="4">
                     <div class="text-caption text-medium-emphasis">冷却 / 状态</div>
-                    <div class="text-body-2" :class="cooldownLeft > 0 ? 'text-warning' : 'text-medium-emphasis'">
-                      <template v-if="cooldownLeft > 0">可再拨倒计时 {{ cooldownText }}</template>
-                      <template v-else-if="settings.pppoePending === 'true'">待确认 · 请点获取 IP</template>
+                    <div class="text-body-2" :class="(sessionLeft > 0 || cooldownLeft > 0) ? 'text-warning' : 'text-medium-emphasis'">
+                      <template v-if="sessionLeft > 0">会话剩余 {{ sessionText }}</template>
+                      <template v-else-if="cooldownLeft > 0">可再拨 {{ cooldownText }}</template>
+                      <template v-else-if="settings.pppoePending === 'true'">待确认 · 自动/手动获取 IP</template>
                       <template v-else-if="settings.pppoeLastAt">时间 {{ settings.pppoeLastAt }}</template>
                       <template v-else>可立即重拨</template>
+                      <div v-if="sessionLeft > 0 && cooldownLeft > 0" class="text-caption text-medium-emphasis mt-1">可再拨 {{ cooldownText }}</div>
                     </div>
                   </v-col>
                 </v-row>
@@ -371,6 +373,7 @@ const argoLoading = ref(false)
 const nowTick = ref(Date.now())
 let cooldownTimer: ReturnType<typeof setInterval> | null = null
 const COOLDOWN_SEC = 300
+const SESSION_SEC = 72 * 3600
 
 const applyPppoeFields = (obj: Record<string, string>) => {
   if (!obj) return
@@ -452,15 +455,35 @@ onUnmounted(() => {
   cooldownTimer = null
 })
 
-const cooldownLeft = computed(() => {
-  void nowTick.value
+const successTs = () => {
   const raw = (settings.value.pppoeLastSuccessTs || '').trim()
   if (!raw) return 0
   const ts = parseInt(raw, 10)
+  return ts || 0
+}
+
+const cooldownLeft = computed(() => {
+  void nowTick.value
+  const ts = successTs()
   if (!ts) return 0
-  const left = COOLDOWN_SEC - Math.floor(Date.now() / 1000 - ts)
+  const left = COOLDOWN_SEC - (Math.floor(Date.now() / 1000) - ts)
   return left > 0 ? left : 0
 })
+
+const sessionLeft = computed(() => {
+  void nowTick.value
+  const ts = successTs()
+  if (!ts) return 0
+  const left = SESSION_SEC - (Math.floor(Date.now() / 1000) - ts)
+  return left > 0 ? left : 0
+})
+
+const formatHms = (total: number) => {
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const r = total % 60
+  return `${h}:${m.toString().padStart(2, '0')}:${r.toString().padStart(2, '0')}`
+}
 
 const cooldownText = computed(() => {
   const s = cooldownLeft.value
@@ -469,12 +492,23 @@ const cooldownText = computed(() => {
   return `${m}:${r.toString().padStart(2, '0')}`
 })
 
+const sessionText = computed(() => formatHms(sessionLeft.value))
+
 const loadData = async () => {
   loading.value = true
   const msg = await HttpUtils.get('api/settings')
   loading.value = false
   if (msg.success) {
     setData(msg.obj)
+    // #region agent log
+    const raw = String((msg.obj && msg.obj.pppoeLastSuccessTs) || '').trim()
+    const ts = parseInt(raw, 10) || 0
+    const nowSec = Math.floor(Date.now() / 1000)
+    const elapsed = ts ? nowSec - ts : null
+    const left = ts ? COOLDOWN_SEC - (elapsed as number) : null
+    const sess = ts ? SESSION_SEC - (elapsed as number) : null
+    fetch('http://127.0.0.1:7611/ingest/dfd3c41e-3d1d-41b7-b746-566bc0e53a83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'28da0c'},body:JSON.stringify({sessionId:'28da0c',runId:'post-fix',hypothesisId:'H1',location:'Settings.vue:loadData',message:'pppoe cooldown/tz/session fields',data:{timeLocation:msg.obj?.timeLocation||'',pppoeLastAt:msg.obj?.pppoeLastAt||'',pppoeLastSuccessTs:raw,ts,nowSec,elapsed,cooldownLeft:left,sessionLeft:sess,browserTz:Intl.DateTimeFormat().resolvedOptions().timeZone,scheduleTime:msg.obj?.pppoeScheduleTime||'',scheduleEnable:msg.obj?.pppoeScheduleEnable||'',pppoeEnable:msg.obj?.pppoeEnable||'',lastAutoFire:msg.obj?.pppoeLastAutoFireDate||'',scheduleDays:msg.obj?.pppoeScheduleDays||'',pending:msg.obj?.pppoePending||''},timestamp:Date.now()})}).catch(()=>{})
+    // #endregion
   }
 }
 
