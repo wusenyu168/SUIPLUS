@@ -659,13 +659,6 @@ const loadData = async () => {
     if (!(settings.value.pppoeScheduleWeekdays || '').trim()) {
       settings.value.pppoeScheduleWeekdays = '1,2,3,4,5,6,7'
     }
-    // #region agent log
-    const tz = (settings.value.timeLocation || 'Asia/Shanghai').trim()
-    const cur = tzParts(tz)
-    const left = scheduleNextLeft.value
-    const fireMs = scheduleNextFireMs.value
-    fetch('http://127.0.0.1:7611/ingest/dfd3c41e-3d1d-41b7-b746-566bc0e53a83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0bfd89'},body:JSON.stringify({sessionId:'0bfd89',runId:'weekday-sched',hypothesisId:'H2',location:'Settings.vue:loadData',message:'schedule next countdown',data:{timeLocation:tz,panelNow:cur,weekdays:settings.value.pppoeScheduleWeekdays||'',scheduleTime:settings.value.pppoeScheduleTime||'',scheduleEnable:settings.value.pppoeScheduleEnable||'',lastAutoFire:settings.value.pppoeLastAutoFireDate||'',nextFireMs:fireMs,nextFireIso:fireMs?new Date(fireMs).toISOString():null,scheduleNextLeft:left,scheduleNextText:left?formatHms(left):''},timestamp:Date.now()})}).catch(()=>{})
-    // #endregion
   }
 }
 

@@ -254,30 +254,6 @@ def maybe_skip_auto(s: dict[str, str]) -> str | None:
     tz_name = panel_tz_name(s)
     weekdays = schedule_weekdays(s)
     iso_wd = now.isoweekday()  # Mon=1 .. Sun=7
-    # #region agent log
-    try:
-        _dbg = {
-            "sessionId": "0bfd89",
-            "runId": "weekday-sched",
-            "hypothesisId": "H1",
-            "location": "suiplus_pppoe_redial.py:maybe_skip_auto",
-            "message": "weekday schedule gate",
-            "data": {
-                "timeLocation": tz_name,
-                "panel_now": now.isoformat(sep=" ", timespec="seconds"),
-                "iso_weekday": iso_wd,
-                "weekdays": sorted(weekdays),
-                "weekdays_raw": (s.get("pppoeScheduleWeekdays") or ""),
-                "scheduleTime": (s.get("pppoeScheduleTime") or ""),
-                "lastAutoFire": (s.get("pppoeLastAutoFireDate") or ""),
-                "scheduleEnable": (s.get("pppoeScheduleEnable") or ""),
-            },
-            "timestamp": int(time.time() * 1000),
-        }
-        log("DEBUG_JSON " + json.dumps(_dbg, ensure_ascii=False))
-    except Exception:
-        pass
-    # #endregion
     if s.get("pppoeEnable", "false").lower() not in ("true", "1", "yes"):
         return "动态拨号未启用"
     if s.get("pppoeScheduleEnable", "false").lower() not in ("true", "1", "yes"):
