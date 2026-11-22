@@ -13,11 +13,12 @@ bash <(curl -Ls https://raw.githubusercontent.com/wusenyu168/SUIPLUS/main/instal
 指定版本（需已发布对应 Release；**一键安装拉的是 Release 包，不是 main 源码即时编译**）：
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/wusenyu168/SUIPLUS/main/install.sh) v1.6.15
+bash <(curl -Ls https://raw.githubusercontent.com/wusenyu168/SUIPLUS/main/install.sh) v1.6.16
 ```
 
-当前源码版本见 `config/version`（应为 `1.6.15`）。发布后 Latest Release 也必须是 `v1.6.15`，否则重装/更新仍会落到旧包。
+当前源码版本见 `config/version`（应为 `1.6.16`）。发布后 Latest Release 也必须是 `v1.6.16`，否则重装/更新仍会落到旧包。
 
+**1.6.16：** 定时重拨改为周几下拉多选 + 时刻；开关旁显示距下次重拨倒计时。  
 **1.6.15：** 会话锚点与「上次获取」拆分（同 IP 不重开 72h）；仅重拨成功锁按钮 5 分钟；周期允许 0 天测定时。  
 **1.6.14：** 拨号定时/LastAt 读取面板 `timeLocation`（默认上海）；72h 会话倒计时；pending 时 timer 自动 `--showip`。  
 **1.6.13：** 动态拨号「获取 IP」+ 冷却倒计时；Argo 立即重建 + 异常自动重建（默认关）；重拨断网后 IP 可补拉。  

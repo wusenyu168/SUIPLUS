@@ -4,7 +4,7 @@
 Manual: 5 minutes cooldown ONLY after successful redial (changeip).
 Session 72h: anchored at first confirm of current IP; same-IP showip does not reset.
 LastAt: always updated on successful showip / confirm (panel timeLocation).
-Auto (--auto): N-day cycle (0 = no day gate) + HH:MM in panel timeLocation.
+Auto (--auto): selected ISO weekdays + HH:MM in panel timeLocation.
 When pppoePending, always try showip first. Does NOT touch Argo.
 """
 from __future__ import annotations
@@ -219,13 +219,26 @@ def parse_hhmm(raw: str) -> tuple[int, int] | None:
     return h, m
 
 
-def schedule_days(s: dict[str, str]) -> int:
-    """0 = no day gate (test-friendly); max 365."""
-    try:
-        n = int(float(str(s.get("pppoeScheduleDays") or "1").strip()))
-    except ValueError:
-        n = 1
-    return max(0, min(n, 365))
+def schedule_weekdays(s: dict[str, str]) -> set[int]:
+    """ISO weekdays 1=Mon .. 7=Sun. Empty → none selected."""
+    raw = (s.get("pppoeScheduleWeekdays") or "").strip()
+    if not raw:
+        # migrate: old N-day configs → all weekdays so schedule still works after upgrade
+        if (s.get("pppoeScheduleDays") or "").strip() != "":
+            return {1, 2, 3, 4, 5, 6, 7}
+        return set()
+    out: set[int] = set()
+    for part in raw.replace(";", ",").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            n = int(part)
+        except ValueError:
+            continue
+        if 1 <= n <= 7:
+            out.add(n)
+    return out
 
 
 def fail(msg: str, *, code: int = 1, **extra: Any) -> int:
@@ -236,17 +249,46 @@ def fail(msg: str, *, code: int = 1, **extra: Any) -> int:
 
 
 def maybe_skip_auto(s: dict[str, str]) -> str | None:
-    """Return skip reason or None to proceed. Times use panel timeLocation."""
+    """Return skip reason or None to proceed. Weekdays + HH:MM in panel timeLocation."""
     now = now_panel(s)
     tz_name = panel_tz_name(s)
-    days = schedule_days(s)
+    weekdays = schedule_weekdays(s)
+    iso_wd = now.isoweekday()  # Mon=1 .. Sun=7
+    # #region agent log
+    try:
+        _dbg = {
+            "sessionId": "0bfd89",
+            "runId": "weekday-sched",
+            "hypothesisId": "H1",
+            "location": "suiplus_pppoe_redial.py:maybe_skip_auto",
+            "message": "weekday schedule gate",
+            "data": {
+                "timeLocation": tz_name,
+                "panel_now": now.isoformat(sep=" ", timespec="seconds"),
+                "iso_weekday": iso_wd,
+                "weekdays": sorted(weekdays),
+                "weekdays_raw": (s.get("pppoeScheduleWeekdays") or ""),
+                "scheduleTime": (s.get("pppoeScheduleTime") or ""),
+                "lastAutoFire": (s.get("pppoeLastAutoFireDate") or ""),
+                "scheduleEnable": (s.get("pppoeScheduleEnable") or ""),
+            },
+            "timestamp": int(time.time() * 1000),
+        }
+        log("DEBUG_JSON " + json.dumps(_dbg, ensure_ascii=False))
+    except Exception:
+        pass
+    # #endregion
     if s.get("pppoeEnable", "false").lower() not in ("true", "1", "yes"):
         return "动态拨号未启用"
     if s.get("pppoeScheduleEnable", "false").lower() not in ("true", "1", "yes"):
         return "定时自动重拨未启用"
+    if not weekdays:
+        return "未勾选任何星期"
     hhmm = parse_hhmm(s.get("pppoeScheduleTime") or "03:00")
     if not hhmm:
         return "定时时刻格式无效（需要 HH:MM）"
+    if iso_wd not in weekdays:
+        return f"今日非勾选日（ISO周{iso_wd}，勾选 {sorted(weekdays)}）"
     if (now.hour, now.minute) < hhmm:
         return (
             f"未到今日时刻 {hhmm[0]:02d}:{hhmm[1]:02d}"
@@ -255,13 +297,6 @@ def maybe_skip_auto(s: dict[str, str]) -> str | None:
     today = now.strftime("%Y-%m-%d")
     if (s.get("pppoeLastAutoFireDate") or "").strip() == today:
         return "今日定时已执行过"
-    # 0 days: skip N-day gate
-    if days > 0:
-        last = last_change_ts(s)
-        need = days * 86400
-        if last and (time.time() - last) < need:
-            left = int(need - (time.time() - last))
-            return f"周期内已换过 IP（设定 {days} 天，约剩余 {max(0, left)//3600} 小时）"
     return None
 
 

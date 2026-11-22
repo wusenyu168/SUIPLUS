@@ -523,6 +523,7 @@ def seed(db_path: str, domain: str, force: bool = False) -> int:
         "pppoePassword": "",
         "pppoeScheduleEnable": "false",
         "pppoeScheduleDays": "1",
+        "pppoeScheduleWeekdays": "1,2,3,4,5,6,7",
         "pppoeScheduleTime": "03:00",
         "pppoeLastIp": "",
         "pppoePrevIp": "",

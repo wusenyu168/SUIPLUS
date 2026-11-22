@@ -149,7 +149,7 @@
             </v-card-title>
             <v-card-text>
               <v-alert type="info" variant="tonal" density="compact" class="mb-3">
-                换线断网正常；恢复后自动或点「获取 IP」。同 IP 重复获取不重开 72h。仅重拨成功后按钮灰 5 分钟。周期可填 0 天测定时。重拨只刷 DDNS，不重建 Argo。
+                换线断网正常；恢复后自动或点「获取 IP」。同 IP 重复获取不重开 72h。仅重拨成功后按钮灰 5 分钟。定时按勾选星期 + 时刻（面板时区）。重拨只刷 DDNS，不重建 Argo。
               </v-alert>
               <v-row class="mb-1">
                 <v-col cols="12" sm="6" md="4">
@@ -177,20 +177,28 @@
                 <v-row align="end">
                   <v-col cols="12" md="4">
                     <v-switch color="primary" v-model="pppoeScheduleEnable" label="定时自动重拨" hide-details />
-                    <div class="text-caption text-medium-emphasis mt-1">满 N 天未换 IP 才自动跑；0=不卡天数（测定时）</div>
+                    <div class="text-caption mt-1" :class="pppoeScheduleEnable && scheduleNextLeft > 0 ? 'text-warning' : 'text-medium-emphasis'">
+                      <template v-if="!pppoeScheduleEnable">未启用</template>
+                      <template v-else-if="pppoeWeekdaySelected.length === 0">请勾选星期</template>
+                      <template v-else-if="scheduleNextLeft > 0">距下次重拨 {{ scheduleNextText }}</template>
+                      <template v-else>已到窗口 · 等待执行</template>
+                    </div>
                   </v-col>
-                  <v-col cols="12" sm="4" md="3">
-                    <v-text-field
-                      v-model="settings.pppoeScheduleDays"
-                      label="周期（天）"
-                      type="number"
-                      min="0"
+                  <v-col cols="12" sm="5" md="4">
+                    <v-select
+                      v-model="pppoeWeekdaySelected"
+                      :items="weekdayOptions"
+                      item-title="title"
+                      item-value="value"
+                      label="星期（可多选）"
+                      multiple
+                      chips
+                      closable-chips
                       hide-details
-                      hint="0=仅按时刻"
-                      persistent-hint
-                    ></v-text-field>
+                      density="comfortable"
+                    ></v-select>
                   </v-col>
-                  <v-col cols="12" sm="8" md="5">
+                  <v-col cols="12" sm="7" md="4">
                     <div class="text-caption text-medium-emphasis mb-1">时刻（时 / 分）</div>
                     <div class="sui-time-pair">
                       <v-select v-model="pppoeScheduleHour" :items="hourOptions" hide-details density="comfortable"></v-select>
@@ -363,6 +371,7 @@ const settings = ref({
   pppoePassword: "",
   pppoeScheduleEnable: "false",
   pppoeScheduleDays: "1",
+  pppoeScheduleWeekdays: "1,2,3,4,5,6,7",
   pppoeScheduleTime: "03:00",
   pppoeLastIp: "",
   pppoePrevIp: "",
@@ -393,6 +402,34 @@ const applyPppoeFields = (obj: Record<string, string>) => {
 const pad2 = (n: number) => n.toString().padStart(2, '0')
 const hourOptions = Array.from({ length: 24 }, (_, i) => pad2(i))
 const minuteOptions = Array.from({ length: 60 }, (_, i) => pad2(i))
+const weekdayOptions = [
+  { title: '星期一', value: 1 },
+  { title: '星期二', value: 2 },
+  { title: '星期三', value: 3 },
+  { title: '星期四', value: 4 },
+  { title: '星期五', value: 5 },
+  { title: '星期六', value: 6 },
+  { title: '星期日', value: 7 },
+]
+
+const parseWeekdays = (raw: string | undefined): number[] => {
+  const text = (raw || '').trim()
+  if (!text) return []
+  const out: number[] = []
+  for (const part of text.split(/[,;]/)) {
+    const n = parseInt(part.trim(), 10)
+    if (n >= 1 && n <= 7 && !out.includes(n)) out.push(n)
+  }
+  return out.sort((a, b) => a - b)
+}
+
+const pppoeWeekdaySelected = computed({
+  get: () => parseWeekdays(settings.value.pppoeScheduleWeekdays),
+  set: (vals: number[]) => {
+    const uniq = [...new Set((vals || []).map((n) => Number(n)).filter((n) => n >= 1 && n <= 7))].sort((a, b) => a - b)
+    settings.value.pppoeScheduleWeekdays = uniq.join(',')
+  }
+})
 
 const parseScheduleParts = () => {
   const raw = (settings.value.pppoeScheduleTime || '03:00').trim()
@@ -418,6 +455,118 @@ const pppoeScheduleMinute = computed({
     settings.value.pppoeScheduleTime = `${h}:${mi}`
   }
 })
+
+/** Panel-TZ wall clock parts (ISO weekday Mon=1..Sun=7). */
+const tzParts = (timeZone: string, at: Date = new Date()) => {
+  const tz = (timeZone || 'Asia/Shanghai').trim() || 'Asia/Shanghai'
+  try {
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      weekday: 'short',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    })
+    const parts = Object.fromEntries(fmt.formatToParts(at).filter((p) => p.type !== 'literal').map((p) => [p.type, p.value]))
+    const wdMap: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 }
+    const isoWeekday = wdMap[parts.weekday] || 1
+    return {
+      tz,
+      isoWeekday,
+      year: parseInt(parts.year, 10),
+      month: parseInt(parts.month, 10),
+      day: parseInt(parts.day, 10),
+      hour: parseInt(parts.hour, 10),
+      minute: parseInt(parts.minute, 10),
+      second: parseInt(parts.second, 10),
+      dateStr: `${parts.year}-${parts.month}-${parts.day}`,
+    }
+  } catch {
+    const d = at
+    const iso = d.getDay() === 0 ? 7 : d.getDay()
+    return {
+      tz: 'Asia/Shanghai',
+      isoWeekday: iso,
+      year: d.getFullYear(),
+      month: d.getMonth() + 1,
+      day: d.getDate(),
+      hour: d.getHours(),
+      minute: d.getMinutes(),
+      second: d.getSeconds(),
+      dateStr: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`,
+    }
+  }
+}
+
+/** Approx epoch ms for a wall-clock datetime in panel TZ (works for Asia/* fixed offsets). */
+const wallToUtcMs = (p: { year: number; month: number; day: number; hour: number; minute: number; second?: number }, timeZone: string) => {
+  const guess = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second || 0)
+  const seen = tzParts(timeZone, new Date(guess))
+  const asUtc = Date.UTC(seen.year, seen.month - 1, seen.day, seen.hour, seen.minute, seen.second)
+  const target = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second || 0)
+  return guess + (target - asUtc)
+}
+
+const addDaysYmd = (y: number, m: number, d: number, add: number) => {
+  const dt = new Date(Date.UTC(y, m - 1, d + add))
+  return { year: dt.getUTCFullYear(), month: dt.getUTCMonth() + 1, day: dt.getUTCDate() }
+}
+
+const formatHms = (total: number) => {
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const r = total % 60
+  return `${h}:${m.toString().padStart(2, '0')}:${r.toString().padStart(2, '0')}`
+}
+
+/** Next scheduled fire ms, or 0 if none / already in today's window awaiting timer. */
+const scheduleNextFireMs = computed(() => {
+  void nowTick.value
+  if (!pppoeScheduleEnable.value) return 0
+  const selected = pppoeWeekdaySelected.value
+  if (!selected.length) return 0
+  const { h, mi } = parseScheduleParts()
+  const hh = parseInt(h, 10)
+  const mm = parseInt(mi, 10)
+  const tz = (settings.value.timeLocation || 'Asia/Shanghai').trim() || 'Asia/Shanghai'
+  const now = new Date()
+  const cur = tzParts(tz, now)
+  const lastFire = (settings.value.pppoeLastAutoFireDate || '').trim()
+  const set = new Set(selected)
+
+  for (let offset = 0; offset <= 8; offset++) {
+    const ymd = addDaysYmd(cur.year, cur.month, cur.day, offset)
+    // weekday of that YMD in tz ≈ use noon UTC of that calendar day adjusted
+    const noonMs = wallToUtcMs({ ...ymd, hour: 12, minute: 0, second: 0 }, tz)
+    const wd = tzParts(tz, new Date(noonMs)).isoWeekday
+    if (!set.has(wd)) continue
+    const fireMs = wallToUtcMs({ ...ymd, hour: hh, minute: mm, second: 0 }, tz)
+    const dateStr = `${ymd.year}-${pad2(ymd.month)}-${pad2(ymd.day)}`
+    if (offset === 0) {
+      if (lastFire === cur.dateStr) continue // already ran today
+      if (fireMs <= now.getTime()) {
+        // in/after today's window and not yet recorded → show 0 (awaiting timer)
+        return 0
+      }
+    }
+    if (fireMs > now.getTime()) return fireMs
+  }
+  return 0
+})
+
+const scheduleNextLeft = computed(() => {
+  void nowTick.value
+  const ms = scheduleNextFireMs.value
+  if (!ms) return 0
+  const left = Math.floor((ms - Date.now()) / 1000)
+  return left > 0 ? left : 0
+})
+
+const scheduleNextText = computed(() => formatHms(scheduleNextLeft.value))
 
 /** 证书已绑定：域名 + 证书/密钥路径齐全后，才允许复制面板链接 */
 const certReady = computed(() => {
@@ -491,13 +640,6 @@ const sessionLeft = computed(() => {
   return left > 0 ? left : 0
 })
 
-const formatHms = (total: number) => {
-  const h = Math.floor(total / 3600)
-  const m = Math.floor((total % 3600) / 60)
-  const r = total % 60
-  return `${h}:${m.toString().padStart(2, '0')}:${r.toString().padStart(2, '0')}`
-}
-
 const cooldownText = computed(() => {
   const s = cooldownLeft.value
   const m = Math.floor(s / 60)
@@ -513,6 +655,17 @@ const loadData = async () => {
   loading.value = false
   if (msg.success) {
     setData(msg.obj)
+    // migrate empty weekdays once for old installs
+    if (!(settings.value.pppoeScheduleWeekdays || '').trim()) {
+      settings.value.pppoeScheduleWeekdays = '1,2,3,4,5,6,7'
+    }
+    // #region agent log
+    const tz = (settings.value.timeLocation || 'Asia/Shanghai').trim()
+    const cur = tzParts(tz)
+    const left = scheduleNextLeft.value
+    const fireMs = scheduleNextFireMs.value
+    fetch('http://127.0.0.1:7611/ingest/dfd3c41e-3d1d-41b7-b746-566bc0e53a83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0bfd89'},body:JSON.stringify({sessionId:'0bfd89',runId:'weekday-sched',hypothesisId:'H2',location:'Settings.vue:loadData',message:'schedule next countdown',data:{timeLocation:tz,panelNow:cur,weekdays:settings.value.pppoeScheduleWeekdays||'',scheduleTime:settings.value.pppoeScheduleTime||'',scheduleEnable:settings.value.pppoeScheduleEnable||'',lastAutoFire:settings.value.pppoeLastAutoFireDate||'',nextFireMs:fireMs,nextFireIso:fireMs?new Date(fireMs).toISOString():null,scheduleNextLeft:left,scheduleNextText:left?formatHms(left):''},timestamp:Date.now()})}).catch(()=>{})
+    // #endregion
   }
 }
 
